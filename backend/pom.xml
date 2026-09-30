@@ -23,6 +23,8 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jjwt.version>0.12.6</jjwt.version>
+        <byte-buddy.version>1.15.11</byte-buddy.version>
+        <maven-jar-plugin.version>3.4.1</maven-jar-plugin.version>
     </properties>
 
     <dependencies>
@@ -105,16 +107,14 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Byte Buddy runtime for Hibernate proxy generation and test Mockito support -->
         <dependency>
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy</artifactId>
-            <version>1.15.11</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy-agent</artifactId>
-            <version>1.15.11</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

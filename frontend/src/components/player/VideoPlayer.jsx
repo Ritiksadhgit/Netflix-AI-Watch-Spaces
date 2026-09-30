@@ -1,8 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { getSubtitleTracksForTitle } from '../../utils/subtitleTracks';
 
 export default function VideoPlayer({
   src,
   poster,
+  titleId = 1,
   playbackState = 'PAUSED',
   authoritativePosition = 0.0,
   serverTs = Date.now(),
@@ -27,7 +29,13 @@ export default function VideoPlayer({
   const [syncStatus, setSyncStatus] = useState('IN_SYNC'); // 'IN_SYNC' | 'ACCELERATING' | 'DECELERATING' | 'RESYNCING'
   const [hostNotice, setHostNotice] = useState('');
 
+  // Subtitle / Localization variations state
+  const [subtitleTracks, setSubtitleTracks] = useState([]);
+  const [activeTrackLang, setActiveTrackLang] = useState('en');
+  const [showCcMenu, setShowCcMenu] = useState(false);
+
   const controlsTimeoutRef = useRef(null);
+
 
   // Format time (seconds -> mm:ss or hh:mm:ss)
   const formatTime = (secs) => {
@@ -252,9 +260,40 @@ export default function VideoPlayer({
     }
   };
 
+  // Load subtitle tracks for title
+  useEffect(() => {
+    const tracks = getSubtitleTracksForTitle(titleId);
+    setSubtitleTracks(tracks);
+    const def = tracks.find((t) => t.isDefault);
+    const initialLang = def ? def.lang : 'en';
+    setActiveTrackLang(initialLang);
+  }, [titleId]);
+
+  // Apply track mode changes to HTML5 text tracks (zero drift / zero interrupt)
+  const applySubtitleTrackMode = useCallback((selectedLang) => {
+    const video = videoRef.current;
+    if (!video || !video.textTracks) return;
+
+    for (let i = 0; i < video.textTracks.length; i++) {
+      const track = video.textTracks[i];
+      if (selectedLang !== 'off' && track.language === selectedLang) {
+        track.mode = 'showing';
+      } else {
+        track.mode = 'disabled';
+      }
+    }
+  }, []);
+
+  const handleSelectSubtitle = (lang) => {
+    setActiveTrackLang(lang);
+    setShowCcMenu(false);
+    applySubtitleTrackMode(lang);
+  };
+
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
+      applySubtitleTrackMode(activeTrackLang);
     }
   };
 
@@ -265,7 +304,7 @@ export default function VideoPlayer({
       onMouseLeave={() => playbackState === 'PLAYING' && setShowControls(false)}
       className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl select-none group border border-white/10"
     >
-      {/* HTML5 Video Element */}
+      {/* HTML5 Video Element with WebVTT Subtitle Tracks */}
       <video
         ref={videoRef}
         src={src}
@@ -278,7 +317,18 @@ export default function VideoPlayer({
         onPlaying={() => setIsBuffering(false)}
         onClick={togglePlayPause}
         className="w-full h-full object-cover cursor-pointer"
-      />
+      >
+        {subtitleTracks.map((track) => (
+          <track
+            key={`${titleId}-${track.id}`}
+            kind="subtitles"
+            src={track.src}
+            srcLang={track.lang}
+            label={track.label}
+            default={track.isDefault}
+          />
+        ))}
+      </video>
 
       {/* Buffering Indicator */}
       {isBuffering && (
@@ -465,6 +515,56 @@ export default function VideoPlayer({
 
           {/* Right Controls */}
           <div className="flex items-center space-x-2">
+            {/* Subtitles / CC Menu Toggle */}
+            <div className="relative">
+              <button
+                onClick={() => setShowCcMenu((prev) => !prev)}
+                className={`px-2 py-1 rounded-md text-xs font-bold tracking-wider transition-all flex items-center space-x-1 ${
+                  activeTrackLang !== 'off'
+                    ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400'
+                    : 'text-gray-400 hover:text-white hover:bg-white/10'
+                }`}
+                title="Subtitles / Closed Captions"
+              >
+                <span>CC</span>
+                <span className="text-[10px] opacity-75">{activeTrackLang.toUpperCase()}</span>
+              </button>
+
+              {/* CC Dropdown Menu */}
+              {showCcMenu && (
+                <div className="absolute bottom-10 right-0 w-44 bg-obsidian-900/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1.5 z-40 space-y-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-white/10">
+                    Audio & Subtitles
+                  </div>
+                  <button
+                    onClick={() => handleSelectSubtitle('off')}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                      activeTrackLang === 'off'
+                        ? 'bg-indigo-600/30 text-indigo-300 font-semibold'
+                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <span>Off</span>
+                    {activeTrackLang === 'off' && <span className="text-indigo-400">✓</span>}
+                  </button>
+                  {subtitleTracks.map((track) => (
+                    <button
+                      key={track.id}
+                      onClick={() => handleSelectSubtitle(track.lang)}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                        activeTrackLang === track.lang
+                          ? 'bg-indigo-600/30 text-indigo-300 font-semibold'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <span>{track.label}</span>
+                      {activeTrackLang === track.lang && <span className="text-indigo-400">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Picture in Picture */}
             <button
               onClick={togglePiP}

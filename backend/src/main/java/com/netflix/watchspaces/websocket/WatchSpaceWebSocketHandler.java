@@ -9,6 +9,7 @@ import com.netflix.watchspaces.repository.WatchSpaceRepository;
 import com.netflix.watchspaces.security.JwtTokenProvider;
 import com.netflix.watchspaces.service.AiGroundingService;
 import com.netflix.watchspaces.service.ChatService;
+import com.netflix.watchspaces.service.NarrativeService;
 import com.netflix.watchspaces.service.TimelineService;
 import com.netflix.watchspaces.websocket.event.WebSocketEnvelope;
 import org.slf4j.Logger;
@@ -36,6 +37,7 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
     private final JwtTokenProvider jwtTokenProvider;
     private final ChatService chatService;
     private final TimelineService timelineService;
+    private final NarrativeService narrativeService;
     private final AiGroundingService aiGroundingService;
     private final WatchSpaceRepository watchSpaceRepository;
     private final ObjectMapper objectMapper;
@@ -45,6 +47,7 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
             JwtTokenProvider jwtTokenProvider,
             ChatService chatService,
             TimelineService timelineService,
+            NarrativeService narrativeService,
             AiGroundingService aiGroundingService,
             WatchSpaceRepository watchSpaceRepository,
             ObjectMapper objectMapper) {
@@ -52,6 +55,7 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
         this.jwtTokenProvider = jwtTokenProvider;
         this.chatService = chatService;
         this.timelineService = timelineService;
+        this.narrativeService = narrativeService;
         this.aiGroundingService = aiGroundingService;
         this.watchSpaceRepository = watchSpaceRepository;
         this.objectMapper = objectMapper;
@@ -152,8 +156,9 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                             err
                     )));
                 } else {
-                    // Check and trigger synchronized trivia on playback advancement
-                    return timelineService.checkAndTriggerTrivia(watchSpaceId, position);
+                    // Check and trigger synchronized trivia and narrative variation points
+                    return timelineService.checkAndTriggerTrivia(watchSpaceId, position)
+                            .then(narrativeService.checkAndTriggerVariation(watchSpaceId, position));
                 }
             } else if ("room.sync.ping".equals(event)) {
                 Number clientSendTs = (Number) payload.get("clientSendTs");
@@ -231,6 +236,17 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                             }
                         })
                         .then();
+            } else if ("room.variation.voteCast".equals(event)) {
+                Number variationIdNum = (Number) payload.get("variationId");
+                Number optionIdNum = (Number) payload.get("optionId");
+                Long variationId = variationIdNum != null ? variationIdNum.longValue() : 0L;
+                Long optionId = optionIdNum != null ? optionIdNum.longValue() : 0L;
+
+                return narrativeService.castVote(watchSpaceId, userId, variationId, optionId).then();
+            } else if ("room.variation.finalize".equals(event)) {
+                Number variationIdNum = (Number) payload.get("variationId");
+                Long variationId = variationIdNum != null ? variationIdNum.longValue() : 0L;
+                return narrativeService.finalizeVote(watchSpaceId, variationId).then();
             } else if ("room.moderation.action".equals(event)) {
                 boolean isHost = userId.equals(room.getHostUserId());
                 if (!isHost && !isAdmin) {

@@ -27,7 +27,12 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
   const [aiAnswer, setAiAnswer] = useState(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
 
+  // Narrative Variation Voting
+  const [activeVariation, setActiveVariation] = useState(null);
+  const [variationResult, setVariationResult] = useState(null);
+
   const socketRef = useRef(null);
+
   const pingIntervalRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const isManuallyClosedRef = useRef(false);
@@ -140,6 +145,32 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
           if (onModerationAction) {
             onModerationAction(payload);
           }
+        } else if (evtType === 'room.variation.voteOpen') {
+          if (payload) {
+            setActiveVariation(payload);
+            setVariationResult(null);
+          }
+        } else if (evtType === 'room.variation.voteCast') {
+          if (payload) {
+            setActiveVariation((prev) => {
+              if (!prev) return prev;
+              const incomingOpts = payload.options || [];
+              const updatedOptions = (prev.options || []).map((opt) => {
+                const match = incomingOpts.find((o) => o.id === opt.id);
+                return match ? { ...opt, votes: match.votes } : opt;
+              });
+              return {
+                ...prev,
+                totalVotes: payload.totalVotes !== undefined ? payload.totalVotes : prev.totalVotes,
+                options: updatedOptions,
+              };
+            });
+          }
+        } else if (evtType === 'room.variation.applied') {
+          if (payload) {
+            setVariationResult(payload);
+            setActiveVariation(null);
+          }
         }
       } catch (err) {
         console.error('Failed to parse incoming WebSocket message', err);
@@ -221,6 +252,27 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
     setActiveTrivia(null);
   }, []);
 
+  const sendVoteCast = useCallback((variationId, optionId) => {
+    sendEnvelope('room.variation.voteCast', {
+      variationId,
+      optionId,
+    });
+  }, [sendEnvelope]);
+
+  const sendFinalizeVote = useCallback((variationId) => {
+    sendEnvelope('room.variation.finalize', {
+      variationId,
+    });
+  }, [sendEnvelope]);
+
+  const dismissVariation = useCallback(() => {
+    setActiveVariation(null);
+  }, []);
+
+  const dismissVariationResult = useCallback(() => {
+    setVariationResult(null);
+  }, []);
+
   return {
     isConnected,
     isConnecting,
@@ -242,6 +294,12 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
     aiAnswer,
     isAiThinking,
     askAiQuestion,
+    activeVariation,
+    variationResult,
+    sendVoteCast,
+    sendFinalizeVote,
+    dismissVariation,
+    dismissVariationResult,
     sendPlaybackUpdate,
     sendChatMessage,
     sendTyping,

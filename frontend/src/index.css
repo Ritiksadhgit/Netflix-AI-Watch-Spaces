@@ -55,3 +55,16 @@
 .glow-emerald {
   box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.35);
 }
+
+/* Cinematic Subtitle / WebVTT Cue Styling */
+video::cue {
+  background-color: rgba(9, 10, 16, 0.85);
+  color: #F8FAFC;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+

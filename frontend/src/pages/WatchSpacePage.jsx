@@ -7,6 +7,7 @@ import { apiClient } from '../services/apiClient';
 import { useWatchSpaceWebSocket } from '../hooks/useWatchSpaceWebSocket';
 import VideoPlayer from '../components/player/VideoPlayer';
 import TriviaOverlay from '../components/player/TriviaOverlay';
+import NarrativeVotingOverlay from '../components/player/NarrativeVotingOverlay';
 
 export default function WatchSpacePage() {
   const { id } = useParams();
@@ -83,6 +84,12 @@ export default function WatchSpacePage() {
     aiAnswer,
     isAiThinking,
     askAiQuestion,
+    activeVariation,
+    variationResult,
+    sendVoteCast,
+    sendFinalizeVote,
+    dismissVariation,
+    dismissVariationResult,
     sendPlaybackUpdate,
     sendChatMessage,
     sendTyping,
@@ -317,6 +324,7 @@ export default function WatchSpacePage() {
               <VideoPlayer
                 src={space.title?.videoAssetUrl}
                 poster={space.title?.backdropUrl || space.title?.posterUrl}
+                titleId={space.title?.id || 1}
                 playbackState={playbackState}
                 authoritativePosition={playbackPosition}
                 serverTs={serverTs}
@@ -336,6 +344,27 @@ export default function WatchSpacePage() {
                     if (isCorrect) {
                       addToast('Correct Answer! +100 Trivia Points', 'success');
                     }
+                  }}
+                />
+              )}
+
+              {/* Synchronized Narrative Variation Decision Overlay */}
+              {(activeVariation || variationResult) && (
+                <NarrativeVotingOverlay
+                  variation={activeVariation}
+                  result={variationResult}
+                  isHost={isHost}
+                  onVote={(varId, optId) => {
+                    sendVoteCast(varId, optId);
+                    addToast('Vote registered!', 'info');
+                  }}
+                  onFinalize={(varId) => {
+                    sendFinalizeVote(varId);
+                    addToast('Finalizing narrative decision...', 'info');
+                  }}
+                  onClose={() => {
+                    if (activeVariation) dismissVariation();
+                    if (variationResult) dismissVariationResult();
                   }}
                 />
               )}

@@ -23,6 +23,7 @@ public class WatchSpaceRoomSession {
     private double playbackPositionSeconds = 0.0;
     private long playbackUpdatedAt = System.currentTimeMillis();
     private boolean isLocked = false;
+    private boolean votingEnabled = true;
 
     // Sinks for non-blocking reactive multicasting
     private final Sinks.Many<String> broadcastSink =
@@ -39,6 +40,12 @@ public class WatchSpaceRoomSession {
 
     // Triggered trivia IDs to prevent duplicates
     private final Set<Long> triggeredTriviaEventIds = Collections.synchronizedSet(new HashSet<>());
+
+    // Triggered variation IDs to prevent duplicate voting prompts
+    private final Set<Long> triggeredVariationEventIds = Collections.synchronizedSet(new HashSet<>());
+
+    // Active narrative voting session
+    private VotingSession activeVotingSession;
 
     public WatchSpaceRoomSession(String watchSpaceId, Long hostUserId, ObjectMapper objectMapper) {
         this.watchSpaceId = watchSpaceId;
@@ -126,6 +133,14 @@ public class WatchSpaceRoomSession {
         return isLocked;
     }
 
+    public boolean isVotingEnabled() {
+        return votingEnabled;
+    }
+
+    public void setVotingEnabled(boolean votingEnabled) {
+        this.votingEnabled = votingEnabled;
+    }
+
     public String getSessionIdForUser(Long userId) {
         return userSessionMap.get(userId);
     }
@@ -172,12 +187,49 @@ public class WatchSpaceRoomSession {
         return snapshot;
     }
 
+    // Trivia deduplication
     public boolean isTriviaTriggered(Long triviaId) {
         return triggeredTriviaEventIds.contains(triviaId);
     }
 
     public void markTriviaTriggered(Long triviaId) {
         triggeredTriviaEventIds.add(triviaId);
+    }
+
+    // Narrative Variation Voting
+    public boolean isVariationTriggered(Long variationId) {
+        return triggeredVariationEventIds.contains(variationId);
+    }
+
+    public void markVariationTriggered(Long variationId) {
+        triggeredVariationEventIds.add(variationId);
+    }
+
+    public synchronized void startVotingSession(
+            Long variationId,
+            String prompt,
+            Map<Long, String> optionLabels,
+            Map<Long, String> optionAssetRefs,
+            int durationSeconds) {
+        long expiresAt = System.currentTimeMillis() + (durationSeconds * 1000L);
+        this.activeVotingSession = new VotingSession(variationId, prompt, optionLabels, optionAssetRefs, expiresAt);
+    }
+
+    public synchronized boolean recordVote(Long userId, Long optionId) {
+        if (activeVotingSession != null) {
+            return activeVotingSession.recordVote(userId, optionId);
+        }
+        return false;
+    }
+
+    public synchronized VotingSession getActiveVotingSession() {
+        return activeVotingSession;
+    }
+
+    public synchronized VotingSession finalizeVoting() {
+        VotingSession session = this.activeVotingSession;
+        this.activeVotingSession = null;
+        return session;
     }
 
     public String getWatchSpaceId() { return watchSpaceId; }
@@ -208,5 +260,56 @@ public class WatchSpaceRoomSession {
         public String getAvatarUrl() { return avatarUrl; }
         public String getRole() { return role; }
         public boolean isHost() { return isHost; }
+    }
+
+    public static class VotingSession {
+        private final Long variationId;
+        private final String prompt;
+        private final Map<Long, String> optionLabels;
+        private final Map<Long, String> optionAssetRefs;
+        private final ConcurrentHashMap<Long, Long> userVotes = new ConcurrentHashMap<>();
+        private final long expiresAt;
+
+        public VotingSession(Long variationId, String prompt, Map<Long, String> optionLabels, Map<Long, String> optionAssetRefs, long expiresAt) {
+            this.variationId = variationId;
+            this.prompt = prompt;
+            this.optionLabels = optionLabels;
+            this.optionAssetRefs = optionAssetRefs;
+            this.expiresAt = expiresAt;
+        }
+
+        public boolean recordVote(Long userId, Long optionId) {
+            if (optionLabels.containsKey(optionId)) {
+                userVotes.put(userId, optionId);
+                return true;
+            }
+            return false;
+        }
+
+        public Map<Long, Integer> getVoteCounts() {
+            Map<Long, Integer> counts = new HashMap<>();
+            for (Long optId : optionLabels.keySet()) {
+                counts.put(optId, 0);
+            }
+            for (Long optId : userVotes.values()) {
+                counts.put(optId, counts.getOrDefault(optId, 0) + 1);
+            }
+            return counts;
+        }
+
+        public Long getWinningOptionId() {
+            Map<Long, Integer> counts = getVoteCounts();
+            return counts.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse(optionLabels.keySet().stream().findFirst().orElse(null));
+        }
+
+        public Long getVariationId() { return variationId; }
+        public String getPrompt() { return prompt; }
+        public Map<Long, String> getOptionLabels() { return optionLabels; }
+        public Map<Long, String> getOptionAssetRefs() { return optionAssetRefs; }
+        public long getExpiresAt() { return expiresAt; }
+        public int getTotalVotes() { return userVotes.size(); }
     }
 }

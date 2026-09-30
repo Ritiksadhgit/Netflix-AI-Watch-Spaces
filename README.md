@@ -200,7 +200,7 @@ $$\mathcal{W}(t) = [t - 90\text{ seconds},\ t + 30\text{ seconds}]$$
    - **Frontend Application**: [http://localhost:3000](http://localhost:3000)
    - **Backend REST API**: [http://localhost:8080/api/v1/health](http://localhost:8080/api/v1/health)
    - **Actuator Health Check**: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
-   - **MySQL Database**: `localhost:3306` (Database: `netflix_watch_spaces`)
+   - **MySQL Database (Container)**: `localhost:3307` (Database: `netflix_watch_spaces`)
 
 ### Pre-Seeded Demo Accounts
 

@@ -8,7 +8,9 @@ com/netflix/watchspaces/domain/dto/response/ErrorResponse$Builder.class
 com/netflix/watchspaces/domain/enums/PlaybackState.class
 com/netflix/watchspaces/domain/dto/response/AuthResponse.class
 com/netflix/watchspaces/domain/dto/response/UserResponse$Builder.class
+com/netflix/watchspaces/domain/dto/response/AiAnswerResponse.class
 com/netflix/watchspaces/controller/TitleController.class
+com/netflix/watchspaces/service/TimelineService.class
 com/netflix/watchspaces/repository/SessionAnalyticsRepository.class
 com/netflix/watchspaces/repository/RefreshTokenRepository.class
 com/netflix/watchspaces/domain/enums/MessageType.class
@@ -43,8 +45,11 @@ com/netflix/watchspaces/security/JwtAuthenticationManager.class
 com/netflix/watchspaces/domain/dto/response/UserResponse.class
 com/netflix/watchspaces/controller/AuthController.class
 com/netflix/watchspaces/domain/entity/Interaction$Builder.class
+com/netflix/watchspaces/controller/AiCoPilotController.class
+com/netflix/watchspaces/domain/dto/response/TriviaEventResponse.class
 com/netflix/watchspaces/security/JwtTokenProvider.class
 com/netflix/watchspaces/domain/entity/SessionAnalytics$Builder.class
+com/netflix/watchspaces/service/AiGroundingService.class
 com/netflix/watchspaces/repository/TitleRepository.class
 com/netflix/watchspaces/domain/entity/ChatMessage.class
 com/netflix/watchspaces/config/CorrelationIdFilter.class
@@ -66,9 +71,12 @@ com/netflix/watchspaces/domain/entity/VariationOption.class
 com/netflix/watchspaces/NetflixWatchSpacesApplication.class
 com/netflix/watchspaces/controller/GlobalExceptionHandler.class
 com/netflix/watchspaces/websocket/WatchSpaceWebSocketHandler.class
+com/netflix/watchspaces/domain/dto/request/AiQuestionRequest.class
 com/netflix/watchspaces/domain/entity/RefreshToken.class
+com/netflix/watchspaces/service/AiGroundingService$MatchedEvent.class
 com/netflix/watchspaces/domain/dto/request/CreateWatchSpaceRequest.class
 com/netflix/watchspaces/service/TitleService.class
+com/netflix/watchspaces/domain/dto/response/TimelineResponse.class
 com/netflix/watchspaces/domain/dto/request/LoginRequest$Builder.class
 com/netflix/watchspaces/domain/dto/response/WatchSpaceResponse$Builder.class
 com/netflix/watchspaces/domain/enums/WatchSpaceStatus.class
@@ -77,6 +85,7 @@ com/netflix/watchspaces/security/SecurityContextRepository.class
 com/netflix/watchspaces/repository/WatchSpaceParticipantRepository.class
 com/netflix/watchspaces/controller/WatchSpaceController.class
 com/netflix/watchspaces/domain/dto/response/WatchSpaceResponse.class
+com/netflix/watchspaces/domain/dto/response/AiSourceCitation.class
 com/netflix/watchspaces/domain/dto/request/RefreshTokenRequest.class
 com/netflix/watchspaces/domain/dto/response/ErrorResponse.class
 com/netflix/watchspaces/domain/dto/response/ChatMessageResponse.class

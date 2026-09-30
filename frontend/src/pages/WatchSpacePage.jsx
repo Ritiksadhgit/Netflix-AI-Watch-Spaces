@@ -6,6 +6,7 @@ import { watchSpaceService } from '../services/watchSpaceService';
 import { apiClient } from '../services/apiClient';
 import { useWatchSpaceWebSocket } from '../hooks/useWatchSpaceWebSocket';
 import VideoPlayer from '../components/player/VideoPlayer';
+import TriviaOverlay from '../components/player/TriviaOverlay';
 
 export default function WatchSpacePage() {
   const { id } = useParams();
@@ -18,9 +19,20 @@ export default function WatchSpacePage() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'roster' | 'ai'
   const [chatInput, setChatInput] = useState('');
+  const [aiInput, setAiInput] = useState('');
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
 
+  const [aiHistory, setAiHistory] = useState([
+    {
+      role: 'assistant',
+      text: 'Hello! I am your AI Co-Pilot. As the stream plays, ask me anything about the active scene, characters, or backstory. I answer strictly from verified timeline metadata with traceable citations.',
+      sources: [],
+      currentScene: 'Introduction',
+    }
+  ]);
+
   const chatScrollRef = useRef(null);
+  const aiScrollRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   // Handle action rejected callback
@@ -66,6 +78,11 @@ export default function WatchSpacePage() {
     messages,
     setMessages,
     typingUsers,
+    activeTrivia,
+    dismissTrivia,
+    aiAnswer,
+    isAiThinking,
+    askAiQuestion,
     sendPlaybackUpdate,
     sendChatMessage,
     sendTyping,
@@ -99,12 +116,35 @@ export default function WatchSpacePage() {
     }
   }, [id, setMessages]);
 
+  // Append new AI answers to AI history
+  useEffect(() => {
+    if (aiAnswer) {
+      setAiHistory((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: aiAnswer.answer,
+          sources: aiAnswer.sources || [],
+          currentScene: aiAnswer.currentScene,
+          timestamp: aiAnswer.timestamp,
+        },
+      ]);
+    }
+  }, [aiAnswer]);
+
   // Auto-scroll chat to bottom
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Auto-scroll AI co-pilot to bottom
+  useEffect(() => {
+    if (aiScrollRef.current) {
+      aiScrollRef.current.scrollTop = aiScrollRef.current.scrollHeight;
+    }
+  }, [aiHistory, isAiThinking]);
 
   // Determine if current user is Host
   const currentHostId = hostUserId || space?.hostUserId;
@@ -133,6 +173,23 @@ export default function WatchSpacePage() {
     typingTimeoutRef.current = setTimeout(() => {
       sendTyping(false);
     }, 2000);
+  };
+
+  // Ask AI Question submit
+  const handleAskAi = (questionText) => {
+    const q = questionText || aiInput;
+    if (!q.trim()) return;
+
+    setAiHistory((prev) => [
+      ...prev,
+      {
+        role: 'user',
+        text: q.trim(),
+        timestamp: currentVideoTime,
+      }
+    ]);
+    askAiQuestion(q.trim(), currentVideoTime);
+    setAiInput('');
   };
 
   // Copy Invite Code
@@ -255,19 +312,34 @@ export default function WatchSpacePage() {
         {/* Left Stage: Cinematic Video Player & Title Details */}
         <section className="flex-1 flex flex-col p-4 sm:p-6 overflow-y-auto">
           <div className="w-full max-w-5xl mx-auto space-y-4">
-            {/* HTML5 Synchronized Player */}
-            <VideoPlayer
-              src={space.title?.videoAssetUrl}
-              poster={space.title?.backdropUrl || space.title?.posterUrl}
-              playbackState={playbackState}
-              authoritativePosition={playbackPosition}
-              serverTs={serverTs}
-              clockSkew={clockSkew}
-              isHost={isHost}
-              hostDisplayName={space.hostUser?.displayName || 'Host'}
-              onPlaybackChange={(newState, newPos) => sendPlaybackUpdate(newState, newPos)}
-              onTimeUpdate={(t) => setCurrentVideoTime(t)}
-            />
+            {/* Player Container with Trivia Overlay */}
+            <div className="relative">
+              <VideoPlayer
+                src={space.title?.videoAssetUrl}
+                poster={space.title?.backdropUrl || space.title?.posterUrl}
+                playbackState={playbackState}
+                authoritativePosition={playbackPosition}
+                serverTs={serverTs}
+                clockSkew={clockSkew}
+                isHost={isHost}
+                hostDisplayName={space.hostUser?.displayName || 'Host'}
+                onPlaybackChange={(newState, newPos) => sendPlaybackUpdate(newState, newPos)}
+                onTimeUpdate={(t) => setCurrentVideoTime(t)}
+              />
+
+              {/* Synchronized Scene Trivia Challenge */}
+              {activeTrivia && (
+                <TriviaOverlay
+                  trivia={activeTrivia}
+                  onClose={dismissTrivia}
+                  onAnswered={(idx, isCorrect) => {
+                    if (isCorrect) {
+                      addToast('Correct Answer! +100 Trivia Points', 'success');
+                    }
+                  }}
+                />
+              )}
+            </div>
 
             {/* Title Overview Card */}
             <div className="bg-obsidian-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 space-y-3">
@@ -510,43 +582,147 @@ export default function WatchSpacePage() {
             </div>
           )}
 
-          {/* Tab 3: AI Co-Pilot Preview */}
+          {/* Tab 3: Interactive Grounded AI Co-Pilot */}
           {activeTab === 'ai' && (
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div className="p-3 bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-indigo-500/10 border border-indigo-500/20 rounded-xl space-y-1.5">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
-                  <span className="text-xs font-bold text-indigo-300">Scene Grounded Intelligence</span>
+            <div className="flex-1 flex flex-col justify-between overflow-hidden p-3">
+              {/* AI Conversation Scroll View */}
+              <div ref={aiScrollRef} className="flex-1 overflow-y-auto space-y-3.5 pr-1">
+                {/* Active Context Banner */}
+                <div className="p-3 bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-indigo-500/10 border border-indigo-500/20 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                      <span className="text-xs font-bold text-indigo-300">Retrieval Grounded Context</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-400">
+                      Sync: {Math.floor(currentVideoTime)}s
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-300 leading-relaxed">
+                    Answers are strictly bound to authored timeline metadata within [ts - 90s, ts + 30s].
+                  </p>
                 </div>
-                <p className="text-[11px] text-gray-300 leading-relaxed">
-                  The AI Co-Pilot analyzes authored scene metadata synchronized with current playback (<span className="font-mono text-indigo-300">{Math.floor(currentVideoTime)}s</span>).
-                </p>
+
+                {/* AI Q&A Feed */}
+                {aiHistory.map((item, idx) => {
+                  const isUser = item.role === 'user';
+
+                  return (
+                    <div key={idx} className={`flex flex-col space-y-1.5 ${isUser ? 'items-end' : 'items-start'}`}>
+                      <div className="flex items-center space-x-1.5 text-[11px] text-gray-400 px-1">
+                        <span className="font-semibold text-indigo-300">
+                          {isUser ? 'You' : 'AI Co-Pilot'}
+                        </span>
+                        {item.currentScene && (
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            • {item.currentScene}
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        className={`max-w-[90%] p-3.5 rounded-2xl text-xs leading-relaxed ${
+                          isUser
+                            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-br-none shadow-md'
+                            : 'bg-obsidian-950/90 border border-white/10 text-gray-200 rounded-bl-none space-y-2'
+                        }`}
+                      >
+                        <p>{item.text}</p>
+
+                        {/* Traceable Source Citations Accordion */}
+                        {!isUser && item.sources && item.sources.length > 0 && (
+                          <div className="pt-2 border-t border-white/10 space-y-1">
+                            <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block">
+                              Verified Timeline Citations
+                            </span>
+                            <div className="flex flex-col space-y-1">
+                              {item.sources.map((src, sIdx) => (
+                                <div
+                                  key={sIdx}
+                                  className="p-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] text-gray-300 flex flex-col space-y-0.5"
+                                >
+                                  <div className="flex items-center justify-between font-mono text-[9px] text-indigo-300">
+                                    <span>[{src.eventType}] {src.title}</span>
+                                    <span>ID #{src.timelineEventId} @ {src.timestamp}s</span>
+                                  </div>
+                                  {src.snippet && (
+                                    <p className="text-gray-400 text-[10px] line-clamp-2">{src.snippet}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* AI Thinking Skeleton State */}
+                {isAiThinking && (
+                  <div className="flex items-center space-x-2 p-3 bg-white/5 border border-white/5 rounded-2xl animate-pulse">
+                    <div className="w-5 h-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+                    <span className="text-xs text-indigo-300 font-medium">
+                      Retrieving timeline events at {Math.floor(currentVideoTime)}s...
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {/* Sample scene quick questions */}
-              <div className="space-y-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Suggested Questions</span>
-                <div className="space-y-1.5">
+              {/* Suggested Questions Quick Chips */}
+              <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5">
+                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Suggested Questions</span>
+                <div className="flex flex-wrap gap-1.5">
                   <button
-                    onClick={() => addToast('AI Grounded retrieval connects in Phase 4!', 'info')}
-                    className="w-full text-left p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs text-gray-300 transition-colors"
+                    type="button"
+                    onClick={() => handleAskAi('Who is Thom?')}
+                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[11px] text-gray-300 transition-colors"
                   >
-                    💬 "Who is Thom in this opening sequence?"
+                    👤 Who is Thom?
                   </button>
                   <button
-                    onClick={() => addToast('AI Grounded retrieval connects in Phase 4!', 'info')}
-                    className="w-full text-left p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs text-gray-300 transition-colors"
+                    type="button"
+                    onClick={() => handleAskAi('What is the Neural Drone Uplink?')}
+                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[11px] text-gray-300 transition-colors"
                   >
-                    💬 "What is the Neural Drone Uplink?"
+                    ⚡ Neural Drone Uplink?
                   </button>
                   <button
-                    onClick={() => addToast('AI Grounded retrieval connects in Phase 4!', 'info')}
-                    className="w-full text-left p-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs text-gray-300 transition-colors"
+                    type="button"
+                    onClick={() => handleAskAi('What software VFX milestone was achieved?')}
+                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[11px] text-gray-300 transition-colors"
                   >
-                    💬 "What VFX milestone was achieved in Tears of Steel?"
+                    🎬 VFX Breakthrough?
                   </button>
                 </div>
               </div>
+
+              {/* AI Question Input Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAskAi();
+                }}
+                className="mt-2 pt-2 flex items-center space-x-2"
+              >
+                <input
+                  type="text"
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  placeholder="Ask about this scene or characters..."
+                  className="flex-1 px-3.5 py-2 bg-obsidian-950 border border-white/15 rounded-xl text-white placeholder-gray-500 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!aiInput.trim() || isAiThinking}
+                  className="p-2 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 disabled:opacity-40 text-white rounded-xl transition-all shadow-md shadow-indigo-600/30"
+                  title="Ask AI Co-Pilot"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </button>
+              </form>
             </div>
           )}
         </aside>

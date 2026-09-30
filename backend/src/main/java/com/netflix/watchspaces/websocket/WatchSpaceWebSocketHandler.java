@@ -5,8 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.watchspaces.domain.enums.MessageType;
 import com.netflix.watchspaces.domain.enums.PlaybackState;
 import com.netflix.watchspaces.domain.enums.RoleType;
+import com.netflix.watchspaces.repository.WatchSpaceRepository;
 import com.netflix.watchspaces.security.JwtTokenProvider;
+import com.netflix.watchspaces.service.AiGroundingService;
 import com.netflix.watchspaces.service.ChatService;
+import com.netflix.watchspaces.service.TimelineService;
 import com.netflix.watchspaces.websocket.event.WebSocketEnvelope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +21,7 @@ import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 
 import java.net.URI;
 import java.util.HashMap;
@@ -31,16 +35,25 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
     private final WatchSpaceRoomManager roomManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final ChatService chatService;
+    private final TimelineService timelineService;
+    private final AiGroundingService aiGroundingService;
+    private final WatchSpaceRepository watchSpaceRepository;
     private final ObjectMapper objectMapper;
 
     public WatchSpaceWebSocketHandler(
             WatchSpaceRoomManager roomManager,
             JwtTokenProvider jwtTokenProvider,
             ChatService chatService,
+            TimelineService timelineService,
+            AiGroundingService aiGroundingService,
+            WatchSpaceRepository watchSpaceRepository,
             ObjectMapper objectMapper) {
         this.roomManager = roomManager;
         this.jwtTokenProvider = jwtTokenProvider;
         this.chatService = chatService;
+        this.timelineService = timelineService;
+        this.aiGroundingService = aiGroundingService;
+        this.watchSpaceRepository = watchSpaceRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -75,7 +88,7 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
 
         room.addParticipant(session.getId(), userId, displayName, null, role.name());
 
-        // Dedicated unicast sink for session-direct replies (e.g. sync pong, rejected actions)
+        // Dedicated unicast sink for session-direct replies (e.g. sync pong, rejected actions, AI answers)
         Sinks.Many<String> directReplySink = Sinks.many().unicast().onBackpressureBuffer();
 
         // 1. Initial Playback Snapshot on join
@@ -138,6 +151,9 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                             watchSpaceId,
                             err
                     )));
+                } else {
+                    // Check and trigger synchronized trivia on playback advancement
+                    return timelineService.checkAndTriggerTrivia(watchSpaceId, position);
                 }
             } else if ("room.sync.ping".equals(event)) {
                 Number clientSendTs = (Number) payload.get("clientSendTs");
@@ -189,6 +205,32 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                 typingPayload.put("displayName", displayName);
                 typingPayload.put("isTyping", payload.get("isTyping"));
                 room.broadcast(WebSocketEnvelope.of("room.chat.typing", watchSpaceId, typingPayload));
+            } else if ("room.ai.ask".equals(event)) {
+                String question = (String) payload.get("question");
+                Number tsNum = (Number) payload.get("currentTimestamp");
+                double ts = tsNum != null ? tsNum.doubleValue() : room.getPlaybackPositionSeconds();
+
+                return Mono.fromCallable(() -> watchSpaceRepository.findById(watchSpaceId))
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .flatMap(spaceOpt -> {
+                            if (spaceOpt.isPresent() && spaceOpt.get().getTitle() != null) {
+                                Long titleId = spaceOpt.get().getTitle().getId();
+                                String verbosity = spaceOpt.get().getAiVerbosity() != null
+                                        ? spaceOpt.get().getAiVerbosity().name() : "NORMAL";
+                                return aiGroundingService.answerQuestion(titleId, question, ts, verbosity);
+                            }
+                            return Mono.empty();
+                        })
+                        .doOnSuccess(ans -> {
+                            if (ans != null) {
+                                directReplySink.tryEmitNext(serializeEnvelope(WebSocketEnvelope.of(
+                                        "room.ai.answer",
+                                        watchSpaceId,
+                                        ans
+                                )));
+                            }
+                        })
+                        .then();
             } else if ("room.moderation.action".equals(event)) {
                 boolean isHost = userId.equals(room.getHostUserId());
                 if (!isHost && !isAdmin) {

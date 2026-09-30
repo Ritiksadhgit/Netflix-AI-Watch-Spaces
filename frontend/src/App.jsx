@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import WatchSpacePage from './pages/WatchSpacePage';
+import AiCoPilotPage from './pages/AiCoPilotPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function AppLayout() {
@@ -30,6 +31,14 @@ function AppLayout() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ai-copilot"
+            element={
+              <ProtectedRoute>
+                <AiCoPilotPage />
               </ProtectedRoute>
             }
           />

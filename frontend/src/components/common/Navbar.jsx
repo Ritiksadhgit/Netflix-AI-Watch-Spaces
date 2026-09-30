@@ -16,6 +16,7 @@ export default function Navbar() {
 
   const navLinks = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'AI Co-Pilot', path: '/ai-copilot', icon: Sparkles },
     { name: 'History', path: '/history', icon: History },
   ];
 

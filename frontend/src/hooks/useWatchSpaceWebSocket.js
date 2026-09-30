@@ -22,6 +22,11 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
   const [messages, setMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
 
+  // Trivia & AI Co-Pilot
+  const [activeTrivia, setActiveTrivia] = useState(null);
+  const [aiAnswer, setAiAnswer] = useState(null);
+  const [isAiThinking, setIsAiThinking] = useState(false);
+
   const socketRef = useRef(null);
   const pingIntervalRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -44,7 +49,6 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
   const connect = useCallback(() => {
     if (!watchSpaceId || !token) return;
 
-    // Use current host or ws protocol
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/ws/watch-space?token=${encodeURIComponent(token)}&watchSpaceId=${encodeURIComponent(watchSpaceId)}`;
@@ -118,7 +122,17 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
               }
             });
           }
+        } else if (evtType === 'room.ai.trivia') {
+          if (payload) {
+            setActiveTrivia(payload);
+          }
+        } else if (evtType === 'room.ai.answer') {
+          if (payload) {
+            setAiAnswer(payload);
+            setIsAiThinking(false);
+          }
         } else if (evtType === 'room.action.rejected') {
+          setIsAiThinking(false);
           if (onActionRejected) {
             onActionRejected(payload);
           }
@@ -142,7 +156,6 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
 
       if (!isManuallyClosedRef.current) {
-        // Handle reconnect backoff
         setReconnectAttempt((prev) => {
           const nextAttempt = prev + 1;
           const delay = Math.min(1000 * Math.pow(1.5, prev), 10000);
@@ -196,6 +209,18 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
     });
   }, [sendEnvelope]);
 
+  const askAiQuestion = useCallback((question, currentTimestamp = 0.0) => {
+    setIsAiThinking(true);
+    sendEnvelope('room.ai.ask', {
+      question,
+      currentTimestamp,
+    });
+  }, [sendEnvelope]);
+
+  const dismissTrivia = useCallback(() => {
+    setActiveTrivia(null);
+  }, []);
+
   return {
     isConnected,
     isConnecting,
@@ -212,6 +237,11 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
     messages,
     setMessages,
     typingUsers,
+    activeTrivia,
+    dismissTrivia,
+    aiAnswer,
+    isAiThinking,
+    askAiQuestion,
     sendPlaybackUpdate,
     sendChatMessage,
     sendTyping,

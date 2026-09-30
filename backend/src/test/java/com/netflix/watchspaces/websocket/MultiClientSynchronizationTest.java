@@ -89,4 +89,37 @@ public class MultiClientSynchronizationTest {
         double driftAfterSeek = Math.abs(resyncedClientTime - targetPos1);
         assertEquals(0.0, driftAfterSeek, 0.001, "Direct seek should immediately eliminate desync");
     }
+
+    @Test
+    @DisplayName("Drift Simulation: Simulates multi-client adaptive rate convergence under variable network jitter")
+    public void testMultiClientDriftConvergenceUnderJitter() {
+        // Initial state at t = 0: host is at 100.0, client 1 lags by 120ms, client 2 leads by 120ms
+        double hostPos = 100.0;
+        double client1Pos = 99.880; // 120ms lag (within gentle micro-rate tier 50ms - 250ms)
+        double client2Pos = 100.120; // 120ms lead (within gentle micro-rate tier 50ms - 250ms)
+
+        // Simulate 20 ticks of 100ms each (2.0 seconds elapsed)
+        for (int tick = 1; tick <= 20; tick++) {
+            // Check drift at start of tick
+            double drift1 = client1Pos - hostPos; // negative = lag, positive = lead
+            double absDrift1 = Math.abs(drift1);
+            double rate1 = (absDrift1 < 0.050) ? 1.0 : (drift1 < 0 ? 1.08 : 0.92);
+
+            double drift2 = client2Pos - hostPos;
+            double absDrift2 = Math.abs(drift2);
+            double rate2 = (absDrift2 < 0.050) ? 1.0 : (drift2 < 0 ? 1.08 : 0.92);
+
+            // Both host and clients advance over the 100ms interval
+            hostPos += 0.100;
+            client1Pos += 0.100 * rate1;
+            client2Pos += 0.100 * rate2;
+        }
+
+        // After 2.0 seconds of adaptive micro-adjustments:
+        double finalDrift1 = Math.abs(client1Pos - hostPos);
+        double finalDrift2 = Math.abs(client2Pos - hostPos);
+
+        assertTrue(finalDrift1 < 0.050, "Client 1 should converge into < 50ms tier within 2 seconds (actual: " + (finalDrift1 * 1000) + "ms)");
+        assertTrue(finalDrift2 < 0.050, "Client 2 should converge into < 50ms tier within 2 seconds (actual: " + (finalDrift2 * 1000) + "ms)");
+    }
 }

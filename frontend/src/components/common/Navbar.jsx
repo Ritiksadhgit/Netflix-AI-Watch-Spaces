@@ -84,22 +84,28 @@ export default function Navbar() {
 
               {/* User Pill */}
               <div className="flex items-center space-x-2 pl-2 border-l border-white/10">
-                <img
-                  src={user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'}
-                  alt={user.displayName}
-                  className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-500/30"
-                />
-                <div className="hidden lg:block text-left">
-                  <div className="text-xs font-semibold text-white leading-tight">
-                    {user.displayName}
+                <Link
+                  to="/settings"
+                  title="Profile & Settings"
+                  className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+                >
+                  <img
+                    src={user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'}
+                    alt={user.displayName}
+                    className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-500/30 hover:ring-brand-purple"
+                  />
+                  <div className="hidden lg:block text-left">
+                    <div className="text-xs font-semibold text-white leading-tight">
+                      {user.displayName}
+                    </div>
+                    <div className="flex items-center space-x-1 mt-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-brand-purple">
+                        {user.role}
+                      </span>
+                      {user.role === 'ADMIN' && <Shield className="w-3 h-3 text-amber-400" />}
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-1 mt-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-purple">
-                      {user.role}
-                    </span>
-                    {user.role === 'ADMIN' && <Shield className="w-3 h-3 text-amber-400" />}
-                  </div>
-                </div>
+                </Link>
 
                 <button
                   onClick={handleLogout}

@@ -33,4 +33,11 @@ export const authService = {
   getMe: async () => {
     return await apiClient('/api/v1/auth/me');
   },
+
+  updateProfile: async (payload) => {
+    return await apiClient('/api/v1/auth/profile', {
+      method: 'PUT',
+      body: payload,
+    });
+  },
 };

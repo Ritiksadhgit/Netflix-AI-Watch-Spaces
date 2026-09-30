@@ -158,4 +158,33 @@ class AuthServiceTest {
                         && ((ResponseStatusException) throwable).getStatusCode().value() == 401)
                 .verify();
     }
+
+    @Test
+    @DisplayName("Should update user profile fields and return updated response")
+    void testUpdateUserProfile() {
+        User user = User.builder()
+                .id(1L)
+                .email("user@example.com")
+                .displayName("Old Name")
+                .avatarUrl("https://old.avatar.jpg")
+                .subtitleLocale("en-US")
+                .role(RoleType.VIEWER)
+                .build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        com.netflix.watchspaces.domain.dto.request.UpdateProfileRequest request =
+                new com.netflix.watchspaces.domain.dto.request.UpdateProfileRequest("New Name", "https://new.avatar.jpg", "es-ES");
+
+        StepVerifier.create(authService.updateUserProfile(1L, request))
+                .assertNext(response -> {
+                    assertEquals("New Name", response.getDisplayName());
+                    assertEquals("https://new.avatar.jpg", response.getAvatarUrl());
+                    assertEquals("es-ES", response.getSubtitleLocale());
+                })
+                .verifyComplete();
+
+        verify(userRepository).save(user);
+    }
 }

@@ -61,4 +61,15 @@ public class AuthController {
         return authService.getUserProfile(principal.getId())
                 .map(ResponseEntity::ok);
     }
+
+    @PutMapping("/profile")
+    public Mono<ResponseEntity<UserResponse>> updateProfile(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody com.netflix.watchspaces.domain.dto.request.UpdateProfileRequest request) {
+        if (principal == null) {
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+        }
+        return authService.updateUserProfile(principal.getId(), request)
+                .map(ResponseEntity::ok);
+    }
 }

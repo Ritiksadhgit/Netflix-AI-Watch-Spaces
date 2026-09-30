@@ -66,6 +66,13 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateProfile = async (payload) => {
+    const updated = await authService.updateProfile(payload);
+    tokenStorage.setUser(updated);
+    setUser(updated);
+    return updated;
+  };
+
   const isAuthenticated = !!user;
   const isHost = user?.role === 'HOST' || user?.role === 'ADMIN';
   const isAdmin = user?.role === 'ADMIN';
@@ -81,6 +88,7 @@ export function AuthProvider({ children }) {
         login,
         register,
         logout,
+        updateProfile,
       }}
     >
       {children}

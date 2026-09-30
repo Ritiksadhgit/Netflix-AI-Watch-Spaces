@@ -120,6 +120,27 @@ public class AuthService {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
+    @Transactional
+    public Mono<UserResponse> updateUserProfile(Long userId, com.netflix.watchspaces.domain.dto.request.UpdateProfileRequest request) {
+        return Mono.fromCallable(() -> {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+            if (request.getDisplayName() != null && !request.getDisplayName().isBlank()) {
+                user.setDisplayName(request.getDisplayName().trim());
+            }
+            if (request.getAvatarUrl() != null && !request.getAvatarUrl().isBlank()) {
+                user.setAvatarUrl(request.getAvatarUrl().trim());
+            }
+            if (request.getSubtitleLocale() != null && !request.getSubtitleLocale().isBlank()) {
+                user.setSubtitleLocale(request.getSubtitleLocale().trim());
+            }
+
+            User saved = userRepository.save(user);
+            return UserResponse.fromEntity(saved);
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
     private AuthResponse createAuthResponse(User user) {
         String accessToken = jwtTokenProvider.generateAccessToken(user);
         String refreshTokenHash = UUID.randomUUID().toString();

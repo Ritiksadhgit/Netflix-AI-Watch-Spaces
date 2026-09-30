@@ -3,9 +3,9 @@
 -- Seed Users (Password: Password123! -> BCrypt hash: $2a$10$Dow1hOaTf52l0gJm4g840.vHwE5.Y.680n0B1l4wX2mH2V7oK.s9i)
 -- Let's provide a reliable BCrypt hash for Password123!
 INSERT IGNORE INTO users (id, email, password_hash, display_name, role, subtitle_locale, avatar_url) VALUES
-(1, 'admin@netflixspaces.com', '$2a$10$7R4Q70Nq7eM4KzVv1mFwXeN7eB.H8Q6H1w5Q2B9K3P4T7E1Y0X4W2', 'Chief Admin', 'ADMIN', 'en-US', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'),
-(2, 'host@netflixspaces.com', '$2a$10$7R4Q70Nq7eM4KzVv1mFwXeN7eB.H8Q6H1w5Q2B9K3P4T7E1Y0X4W2', 'Elena (Party Host)', 'HOST', 'en-US', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'),
-(3, 'viewer@netflixspaces.com', '$2a$10$7R4Q70Nq7eM4KzVv1mFwXeN7eB.H8Q6H1w5Q2B9K3P4T7E1Y0X4W2', 'Alex (Viewer)', 'VIEWER', 'en-US', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80');
+(1, 'admin@netflixspaces.com', '$2a$10$e6igtY5FeK16z6g7or2wCebA9b.PyROIjwVhWRleNzOGX4iBE8ttG', 'Chief Admin', 'ADMIN', 'en-US', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'),
+(2, 'host@netflixspaces.com', '$2a$10$e6igtY5FeK16z6g7or2wCebA9b.PyROIjwVhWRleNzOGX4iBE8ttG', 'Elena (Party Host)', 'HOST', 'en-US', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'),
+(3, 'viewer@netflixspaces.com', '$2a$10$e6igtY5FeK16z6g7or2wCebA9b.PyROIjwVhWRleNzOGX4iBE8ttG', 'Alex (Viewer)', 'VIEWER', 'en-US', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80');
 
 -- Seed Titles (High Quality Legal Open Assets from Blender Foundation)
 INSERT IGNORE INTO titles (id, name, synopsis, duration_seconds, video_asset_url, poster_url, backdrop_url, genres, rating_code, release_year) VALUES

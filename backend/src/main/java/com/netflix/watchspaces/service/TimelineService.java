@@ -83,6 +83,7 @@ public class TimelineService {
                     if (!room.isTriviaTriggered(ev.getId())) {
                         room.markTriviaTriggered(ev.getId());
                         parseTriviaEvent(ev).ifPresent(trivia -> {
+                            room.incrementTriviaShownCount();
                             log.info("Triggering trivia {} for room {} at pos {}", ev.getId(), watchSpaceId, currentPosition);
                             room.broadcast(WebSocketEnvelope.of("room.ai.trivia", watchSpaceId, trivia));
                         });

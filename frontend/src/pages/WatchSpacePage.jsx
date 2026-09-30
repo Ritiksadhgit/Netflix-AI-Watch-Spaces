@@ -8,6 +8,9 @@ import { useWatchSpaceWebSocket } from '../hooks/useWatchSpaceWebSocket';
 import VideoPlayer from '../components/player/VideoPlayer';
 import TriviaOverlay from '../components/player/TriviaOverlay';
 import NarrativeVotingOverlay from '../components/player/NarrativeVotingOverlay';
+import SessionAnalyticsModal from '../components/analytics/SessionAnalyticsModal';
+import { interactionService } from '../services/interactionService';
+import { BarChart3 } from 'lucide-react';
 
 export default function WatchSpacePage() {
   const { id } = useParams();
@@ -22,6 +25,7 @@ export default function WatchSpacePage() {
   const [chatInput, setChatInput] = useState('');
   const [aiInput, setAiInput] = useState('');
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
 
   const [aiHistory, setAiHistory] = useState([
     {
@@ -152,6 +156,19 @@ export default function WatchSpacePage() {
       aiScrollRef.current.scrollTop = aiScrollRef.current.scrollHeight;
     }
   }, [aiHistory, isAiThinking]);
+
+  // Periodically record playback interaction for user watch history
+  useEffect(() => {
+    if (!space?.title?.id || currentVideoTime < 5) return;
+    const interval = setInterval(() => {
+      interactionService.recordInteraction(
+        space.title.id,
+        Math.floor(currentVideoTime)
+      ).catch(() => {});
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [space?.title?.id, currentVideoTime]);
 
   // Determine if current user is Host
   const currentHostId = hostUserId || space?.hostUserId;
@@ -303,6 +320,16 @@ export default function WatchSpacePage() {
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>{participantCount || participants.length || 1} online</span>
           </div>
+
+          {/* Session Analytics Button */}
+          <button
+            onClick={() => setShowAnalyticsModal(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-semibold transition-colors"
+            title="View Real-Time Room Analytics"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Analytics</span>
+          </button>
 
           {/* Leave Button */}
           <button
@@ -756,6 +783,14 @@ export default function WatchSpacePage() {
           )}
         </aside>
       </main>
+
+      {/* Session Performance & Community Analytics Modal */}
+      <SessionAnalyticsModal
+        isOpen={showAnalyticsModal}
+        onClose={() => setShowAnalyticsModal(false)}
+        watchSpaceId={id}
+        spaceName={space?.name}
+      />
     </div>
   );
 }

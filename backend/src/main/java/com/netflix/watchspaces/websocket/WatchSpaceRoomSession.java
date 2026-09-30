@@ -47,11 +47,32 @@ public class WatchSpaceRoomSession {
     // Active narrative voting session
     private VotingSession activeVotingSession;
 
+    // Live session analytics counters
+    private final long sessionCreatedAt = System.currentTimeMillis();
+    private volatile int peakParticipants = 0;
+    private final java.util.concurrent.atomic.AtomicInteger aiQuestionsCount = new java.util.concurrent.atomic.AtomicInteger(0);
+    private final java.util.concurrent.atomic.AtomicInteger triviaShownCount = new java.util.concurrent.atomic.AtomicInteger(0);
+    private final java.util.concurrent.atomic.AtomicInteger chatMessagesCount = new java.util.concurrent.atomic.AtomicInteger(0);
+    private final java.util.concurrent.atomic.AtomicInteger votesCastCount = new java.util.concurrent.atomic.AtomicInteger(0);
+
     public WatchSpaceRoomSession(String watchSpaceId, Long hostUserId, ObjectMapper objectMapper) {
         this.watchSpaceId = watchSpaceId;
         this.hostUserId = hostUserId;
         this.objectMapper = objectMapper;
     }
+
+    public void incrementAiQuestionsCount() { aiQuestionsCount.incrementAndGet(); }
+    public void incrementTriviaShownCount() { triviaShownCount.incrementAndGet(); }
+    public void incrementChatMessagesCount() { chatMessagesCount.incrementAndGet(); }
+    public void incrementVotesCastCount() { votesCastCount.incrementAndGet(); }
+
+    public int getAiQuestionsCount() { return aiQuestionsCount.get(); }
+    public int getTriviaShownCount() { return triviaShownCount.get(); }
+    public int getChatMessagesCount() { return chatMessagesCount.get(); }
+    public int getVotesCastCount() { return votesCastCount.get(); }
+    public int getPeakParticipants() { return peakParticipants; }
+    public int getSessionDurationSeconds() { return (int) Math.max(0, (System.currentTimeMillis() - sessionCreatedAt) / 1000); }
+
 
     public Flux<String> getBroadcastFlux() {
         return broadcastSink.asFlux();
@@ -93,6 +114,7 @@ public class WatchSpaceRoomSession {
 
         boolean isHost = userId.equals(hostUserId);
         sessions.put(sessionId, new ParticipantInfo(userId, displayName, avatarUrl, role, isHost));
+        this.peakParticipants = Math.max(this.peakParticipants, sessions.size());
 
         broadcastPresence();
     }
@@ -217,7 +239,11 @@ public class WatchSpaceRoomSession {
 
     public synchronized boolean recordVote(Long userId, Long optionId) {
         if (activeVotingSession != null) {
-            return activeVotingSession.recordVote(userId, optionId);
+            boolean recorded = activeVotingSession.recordVote(userId, optionId);
+            if (recorded) {
+                this.votesCastCount.incrementAndGet();
+            }
+            return recorded;
         }
         return false;
     }

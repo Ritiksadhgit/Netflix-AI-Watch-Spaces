@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Play, Sparkles, LogOut, LayoutDashboard, Shield, Film, History, User } from 'lucide-react';
+import { Play, Sparkles, LogOut, LayoutDashboard, Shield, Film, History, User, Flame } from 'lucide-react';
 import CinematicButton from './CinematicButton';
 
 export default function Navbar() {
@@ -16,6 +16,7 @@ export default function Navbar() {
 
   const navLinks = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'Recommendations', path: '/recommendations', icon: Flame },
     { name: 'AI Co-Pilot', path: '/ai-copilot', icon: Sparkles },
     { name: 'History', path: '/history', icon: History },
   ];

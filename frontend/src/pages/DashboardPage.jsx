@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { watchSpaceService } from '../services/watchSpaceService';
+import { recommendationService } from '../services/recommendationService';
+import { interactionService } from '../services/interactionService';
 import CreateWatchSpaceModal from '../components/watchspace/CreateWatchSpaceModal';
+import SessionAnalyticsModal from '../components/analytics/SessionAnalyticsModal';
 import GlassCard from '../components/common/GlassCard';
 import CinematicButton from '../components/common/CinematicButton';
 import { 
@@ -15,7 +18,11 @@ import {
   Clock, 
   Film, 
   Award,
-  Radio
+  Radio,
+  BarChart3,
+  Flame,
+  ChevronRight,
+  History
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -25,10 +32,20 @@ export default function DashboardPage() {
 
   const [activeSpaces, setActiveSpaces] = useState([]);
   const [loadingSpaces, setLoadingSpaces] = useState(true);
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecs, setLoadingRecs] = useState(true);
+  const [continueWatching, setContinueWatching] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [preselectedTitleId, setPreselectedTitleId] = useState(null);
   const [isJoining, setIsJoining] = useState(false);
+
+  // Session Analytics Modal
+  const [analyticsTargetSpace, setAnalyticsTargetSpace] = useState(null);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
 
   // Fallback sample spaces matching seeded DB records
   const sampleSpaces = [
@@ -82,35 +99,90 @@ export default function DashboardPage() {
       .finally(() => setLoadingSpaces(false));
   }, []);
 
-  const continueWatching = [
-    {
-      id: 1,
-      name: 'Tears of Steel',
-      progress: 65,
-      duration: '12 min',
-      genre: 'Sci-Fi, Cyberpunk',
-      posterUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
-      spaceId: 'ws_demo_live',
-    },
-    {
-      id: 2,
-      name: 'Sintel',
-      progress: 30,
-      duration: '15 min',
-      genre: 'Fantasy, Adventure',
-      posterUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80',
-      spaceId: 'ws_demo_sintel',
-    },
-    {
-      id: 3,
-      name: 'Big Buck Bunny',
-      progress: 10,
-      duration: '10 min',
-      genre: 'Animation, Comedy',
-      posterUrl: 'https://images.unsplash.com/photo-1535083783855-76ae62b2914e?auto=format&fit=crop&w=600&q=80',
-      spaceId: 'ws_demo_live',
-    },
-  ];
+  // Fetch personalized recommendations
+  useEffect(() => {
+    setLoadingRecs(true);
+    recommendationService.getRecommendations()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setRecommendations(data);
+        } else {
+          setRecommendations([
+            {
+              id: 1,
+              name: 'Tears of Steel',
+              genres: 'Sci-Fi, Cyberpunk',
+              durationSeconds: 734,
+              posterUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
+              matchScore: 98,
+              matchReason: 'Top Trending in Sci-Fi',
+              synopsis: 'Warriors battle rogue cybernetic drones across dystopian Amsterdam.'
+            },
+            {
+              id: 2,
+              name: 'Sintel',
+              genres: 'Fantasy, Adventure',
+              durationSeconds: 888,
+              posterUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80',
+              matchScore: 94,
+              matchReason: 'Because you love Fantasy & Drama',
+              synopsis: 'A lonely tracker rescues and nurses a wounded baby dragon.'
+            },
+            {
+              id: 3,
+              name: 'Big Buck Bunny',
+              genres: 'Animation, Comedy',
+              durationSeconds: 596,
+              posterUrl: 'https://images.unsplash.com/photo-1535083783855-76ae62b2914e?auto=format&fit=crop&w=600&q=80',
+              matchScore: 89,
+              matchReason: 'Lighthearted Family Fun',
+              synopsis: 'A benevolent forest rabbit stands up to woodland bullies.'
+            }
+          ]);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load recommendations', err);
+      })
+      .finally(() => setLoadingRecs(false));
+  }, []);
+
+  // Fetch watch history / continue watching
+  useEffect(() => {
+    setLoadingHistory(true);
+    interactionService.getWatchHistory()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const inProgress = data.filter((item) => !item.completed && item.progressPercent > 0);
+          setContinueWatching(inProgress.length > 0 ? inProgress : data.slice(0, 3));
+        } else {
+          setContinueWatching([
+            {
+              id: 1,
+              titleId: 1,
+              titleName: 'Tears of Steel',
+              progressPercent: 65,
+              watchedSeconds: 477,
+              durationSeconds: 734,
+              posterUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
+            },
+            {
+              id: 2,
+              titleId: 2,
+              titleName: 'Sintel',
+              progressPercent: 30,
+              watchedSeconds: 266,
+              durationSeconds: 888,
+              posterUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80',
+            }
+          ]);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load history', err);
+      })
+      .finally(() => setLoadingHistory(false));
+  }, []);
 
   const handleJoinByCode = async (e) => {
     e.preventDefault();
@@ -124,7 +196,6 @@ export default function DashboardPage() {
       setShowJoinModal(false);
       navigate(`/watch/${res.id}`);
     } catch (err) {
-      // If code matches sample fallback
       const code = inviteCodeInput.trim().toUpperCase();
       if (code === 'CYBER-2026') {
         addToast('Entering Cyberpunk Sci-Fi Premiere Watch space...', 'success');
@@ -142,13 +213,23 @@ export default function DashboardPage() {
     }
   };
 
+  const handleStartHostForTitle = (titleId) => {
+    setPreselectedTitleId(titleId);
+    setShowCreateModal(true);
+  };
+
   const handleCreatedSpace = (newSpace) => {
     navigate(`/watch/${newSpace.id}`);
   };
 
+  const handleOpenAnalytics = (spaceId, spaceName, e) => {
+    e.stopPropagation();
+    setAnalyticsTargetSpace({ id: spaceId, name: spaceName });
+    setShowAnalyticsModal(true);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
-      
       {/* Welcome Banner */}
       <div className="relative rounded-3xl p-8 sm:p-10 glass-panel border-white/10 overflow-hidden glow-indigo">
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -178,7 +259,10 @@ export default function DashboardPage() {
             <CinematicButton
               variant="primary"
               size="md"
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                setPreselectedTitleId(null);
+                setShowCreateModal(true);
+              }}
               className="flex-1 md:flex-initial"
             >
               <PlusCircle className="w-4 h-4 mr-2" />
@@ -288,10 +372,92 @@ export default function DashboardPage() {
                 </p>
                 <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500">
                   <span>Code: <code className="text-indigo-300 font-mono">{space.inviteCode}</code></span>
-                  <span className="text-indigo-400 font-medium group-hover:translate-x-1 transition-transform">
-                    Enter Space &rarr;
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={(e) => handleOpenAnalytics(space.id, space.name, e)}
+                      className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-indigo-300 transition-colors"
+                      title="View session analytics"
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-indigo-400 font-medium group-hover:translate-x-1 transition-transform">
+                      Enter Space &rarr;
+                    </span>
+                  </div>
                 </div>
+              </div>
+            </GlassCard>
+          ))}
+        </div>
+      </section>
+
+      {/* Recommended for You Rail */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Flame className="w-5 h-5 text-amber-400" />
+            <h2 className="text-xl font-bold text-white tracking-tight">
+              Recommended for You
+            </h2>
+          </div>
+          <Link
+            to="/recommendations"
+            className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 font-semibold transition-colors"
+          >
+            <span>Explore All Recommendations</span>
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {recommendations.slice(0, 3).map((rec) => (
+            <GlassCard
+              key={rec.id}
+              hoverEffect
+              className="p-5 flex flex-col justify-between space-y-4 border-white/10 group"
+            >
+              <div className="space-y-3">
+                <div className="aspect-video relative rounded-xl overflow-hidden">
+                  <img
+                    src={rec.posterUrl}
+                    alt={rec.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-obsidian-950 via-transparent to-transparent" />
+                  
+                  {/* Match Score Badge */}
+                  <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-emerald-500/90 backdrop-blur-md text-obsidian-950 text-xs font-black shadow-lg">
+                    {rec.matchScore}% Match
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-base font-bold text-white group-hover:text-brand-purple transition-colors truncate">
+                    {rec.name}
+                  </h3>
+                  <p className="text-xs text-indigo-300 font-medium mt-0.5">
+                    {rec.matchReason || 'Curated recommendation'}
+                  </p>
+                  <p className="text-xs text-slate-400 line-clamp-2 mt-2 leading-relaxed">
+                    {rec.synopsis}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-white/10 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">
+                  {Math.floor((rec.durationSeconds || 0) / 60)} mins &bull; {rec.genres}
+                </span>
+
+                <CinematicButton
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handleStartHostForTitle(rec.id)}
+                  className="text-xs"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 mr-1" />
+                  <span>Host Space</span>
+                </CinematicButton>
               </div>
             </GlassCard>
           ))}
@@ -307,19 +473,26 @@ export default function DashboardPage() {
               Continue Watching
             </h2>
           </div>
+          <Link
+            to="/history"
+            className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 font-semibold transition-colors"
+          >
+            <span>View Full Watch History</span>
+            <ChevronRight className="w-4 h-4" />
+          </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {continueWatching.map((item) => (
             <div
               key={item.id}
               className="glass-panel rounded-2xl overflow-hidden group hover:border-indigo-500/40 transition-all cursor-pointer"
-              onClick={() => navigate(`/watch/${item.spaceId}`)}
+              onClick={() => handleStartHostForTitle(item.titleId || item.id)}
             >
               <div className="aspect-[16/9] relative overflow-hidden">
                 <img
                   src={item.posterUrl}
-                  alt={item.name}
+                  alt={item.titleName || item.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-obsidian-950 via-transparent to-transparent" />
@@ -329,20 +502,20 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 {/* Progress Bar */}
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-obsidian-900">
+                <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-obsidian-900">
                   <div
-                    className="h-full bg-brand-purple"
-                    style={{ width: `${item.progress}%` }}
+                    className="h-full bg-gradient-to-r from-indigo-500 to-brand-purple"
+                    style={{ width: `${item.progressPercent || item.progress || 50}%` }}
                   />
                 </div>
               </div>
               <div className="p-4 space-y-1">
                 <h4 className="text-sm font-bold text-white group-hover:text-brand-purple transition-colors truncate">
-                  {item.name}
+                  {item.titleName || item.name}
                 </h4>
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>{item.genre}</span>
-                  <span>{item.duration}</span>
+                  <span>{item.progressPercent || item.progress || 50}% watched</span>
+                  <span>{Math.floor((item.watchedSeconds || 400) / 60)}m / {Math.floor((item.durationSeconds || 700) / 60)}m</span>
                 </div>
               </div>
             </div>
@@ -402,8 +575,16 @@ export default function DashboardPage() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreated={handleCreatedSpace}
+        preselectedTitleId={preselectedTitleId}
       />
 
+      {/* Session Analytics Modal */}
+      <SessionAnalyticsModal
+        isOpen={showAnalyticsModal}
+        onClose={() => setShowAnalyticsModal(false)}
+        watchSpaceId={analyticsTargetSpace?.id}
+        spaceName={analyticsTargetSpace?.name}
+      />
     </div>
   );
 }

@@ -10,6 +10,8 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import RecommendationsPage from './pages/RecommendationsPage';
+import WatchHistoryPage from './pages/WatchHistoryPage';
 import WatchSpacePage from './pages/WatchSpacePage';
 import AiCoPilotPage from './pages/AiCoPilotPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -31,6 +33,22 @@ function AppLayout() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recommendations"
+            element={
+              <ProtectedRoute>
+                <RecommendationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <WatchHistoryPage />
               </ProtectedRoute>
             }
           />

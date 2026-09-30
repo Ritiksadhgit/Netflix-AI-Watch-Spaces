@@ -190,6 +190,7 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
 
                 return chatService.saveMessage(watchSpaceId, userId, displayName, body, tsSeconds, MessageType.USER)
                         .doOnSuccess(saved -> {
+                            room.incrementChatMessagesCount();
                             Map<String, Object> msgPayload = new HashMap<>();
                             msgPayload.put("id", saved.getId());
                             msgPayload.put("userId", userId);
@@ -211,6 +212,7 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                 typingPayload.put("isTyping", payload.get("isTyping"));
                 room.broadcast(WebSocketEnvelope.of("room.chat.typing", watchSpaceId, typingPayload));
             } else if ("room.ai.ask".equals(event)) {
+                room.incrementAiQuestionsCount();
                 String question = (String) payload.get("question");
                 Number tsNum = (Number) payload.get("currentTimestamp");
                 double ts = tsNum != null ? tsNum.doubleValue() : room.getPlaybackPositionSeconds();

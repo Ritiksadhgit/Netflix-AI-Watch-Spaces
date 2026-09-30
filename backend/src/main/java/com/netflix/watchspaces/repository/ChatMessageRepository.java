@@ -16,4 +16,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     @Query("SELECT m FROM ChatMessage m WHERE m.watchSpace.id = :watchSpaceId AND m.id < :beforeId ORDER BY m.createdAt DESC")
     List<ChatMessage> findByWatchSpaceIdBefore(String watchSpaceId, Long beforeId, Pageable pageable);
+
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.watchSpace.id = :watchSpaceId")
+    long countByWatchSpaceId(String watchSpaceId);
 }

@@ -19,6 +19,7 @@ export default function Navbar() {
     { name: 'Recommendations', path: '/recommendations', icon: Flame },
     { name: 'AI Co-Pilot', path: '/ai-copilot', icon: Sparkles },
     { name: 'History', path: '/history', icon: History },
+    ...(user?.role === 'ADMIN' ? [{ name: 'Admin Studio', path: '/admin/timeline', icon: Shield }] : []),
   ];
 
   return (

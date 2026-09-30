@@ -14,6 +14,7 @@ import RecommendationsPage from './pages/RecommendationsPage';
 import WatchHistoryPage from './pages/WatchHistoryPage';
 import WatchSpacePage from './pages/WatchSpacePage';
 import AiCoPilotPage from './pages/AiCoPilotPage';
+import AdminTimelinePage from './pages/AdminTimelinePage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function AppLayout() {
@@ -57,6 +58,14 @@ function AppLayout() {
             element={
               <ProtectedRoute>
                 <AiCoPilotPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/timeline"
+            element={
+              <ProtectedRoute>
+                <AdminTimelinePage />
               </ProtectedRoute>
             }
           />

@@ -84,7 +84,7 @@ public class WatchSpaceService {
                     .build();
             participantRepository.save(hostParticipant);
 
-            return WatchSpaceResponse.fromEntity(savedSpace, 1, hostUserId);
+            return WatchSpaceResponse.fromEntity(savedSpace, title, host, 1, hostUserId);
         }).subscribeOn(Schedulers.boundedElastic());
     }
 

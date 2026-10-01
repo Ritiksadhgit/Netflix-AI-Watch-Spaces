@@ -11,9 +11,9 @@ import java.util.Optional;
 @Repository
 public interface WatchSpaceParticipantRepository extends JpaRepository<WatchSpaceParticipant, Long> {
 
-    @Query("SELECT p FROM WatchSpaceParticipant p WHERE p.watchSpace.id = :watchSpaceId AND p.leftAt IS NULL")
+    @Query("SELECT p FROM WatchSpaceParticipant p JOIN FETCH p.user WHERE p.watchSpace.id = :watchSpaceId AND p.leftAt IS NULL")
     List<WatchSpaceParticipant> findActiveByWatchSpaceId(String watchSpaceId);
 
-    @Query("SELECT p FROM WatchSpaceParticipant p WHERE p.watchSpace.id = :watchSpaceId AND p.user.id = :userId AND p.leftAt IS NULL")
+    @Query("SELECT p FROM WatchSpaceParticipant p JOIN FETCH p.user WHERE p.watchSpace.id = :watchSpaceId AND p.user.id = :userId AND p.leftAt IS NULL")
     Optional<WatchSpaceParticipant> findActiveByWatchSpaceIdAndUserId(String watchSpaceId, Long userId);
 }

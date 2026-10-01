@@ -3,7 +3,7 @@ import { apiClient } from '../../services/apiClient';
 import { watchSpaceService } from '../../services/watchSpaceService';
 import { useToast } from '../../context/ToastContext';
 
-export default function CreateWatchSpaceModal({ isOpen, onClose, onCreated }) {
+export default function CreateWatchSpaceModal({ isOpen, onClose, onCreated, preselectedTitleId }) {
   const { addToast } = useToast();
   const [titles, setTitles] = useState([]);
   const [loadingTitles, setLoadingTitles] = useState(true);
@@ -24,8 +24,9 @@ export default function CreateWatchSpaceModal({ isOpen, onClose, onCreated }) {
         .then((data) => {
           if (Array.isArray(data) && data.length > 0) {
             setTitles(data);
-            setSelectedTitleId(data[0].id.toString());
-            setName(`${data[0].name} Watch Space`);
+            const targetTitle = (preselectedTitleId && data.find((d) => d.id.toString() === preselectedTitleId.toString())) || data[0];
+            setSelectedTitleId(targetTitle.id.toString());
+            setName(`${targetTitle.name} Watch Space`);
           }
         })
         .catch((err) => {
@@ -33,7 +34,7 @@ export default function CreateWatchSpaceModal({ isOpen, onClose, onCreated }) {
         })
         .finally(() => setLoadingTitles(false));
     }
-  }, [isOpen]);
+  }, [isOpen, preselectedTitleId]);
 
   if (!isOpen) return null;
 
@@ -61,10 +62,12 @@ export default function CreateWatchSpaceModal({ isOpen, onClose, onCreated }) {
 
       const newSpace = await watchSpaceService.createWatchSpace(payload);
       addToast('Watch Space created successfully!', 'success');
-      onCreated(newSpace);
+      if (onCreated) {
+        onCreated(newSpace);
+      }
       onClose();
     } catch (err) {
-      addToast(err.message || 'Failed to create Watch Space', 'error');
+      addToast(err.detail || err.message || 'Failed to create Watch Space', 'error');
     } finally {
       setIsSubmitting(false);
     }

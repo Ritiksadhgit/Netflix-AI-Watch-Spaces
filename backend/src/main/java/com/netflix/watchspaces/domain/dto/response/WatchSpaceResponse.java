@@ -1,5 +1,7 @@
 package com.netflix.watchspaces.domain.dto.response;
 
+import com.netflix.watchspaces.domain.entity.Title;
+import com.netflix.watchspaces.domain.entity.User;
 import com.netflix.watchspaces.domain.entity.WatchSpace;
 import com.netflix.watchspaces.domain.enums.AiVerbosity;
 import com.netflix.watchspaces.domain.enums.PlaybackState;
@@ -113,6 +115,32 @@ public class WatchSpaceResponse {
                 .playbackUpdatedAt(ws.getPlaybackUpdatedAt())
                 .title(TitleResponse.fromEntity(ws.getTitle()))
                 .hostUser(UserResponse.fromEntity(ws.getHostUser()))
+                .participantCount(participantCount)
+                .isHost(hostMatch)
+                .createdAt(ws.getCreatedAt())
+                .build();
+    }
+
+    public static WatchSpaceResponse fromEntity(WatchSpace ws, Title title, User hostUser, int participantCount, Long currentUserId) {
+        if (ws == null) return null;
+        User effectiveHost = hostUser != null ? hostUser : ws.getHostUser();
+        Title effectiveTitle = title != null ? title : ws.getTitle();
+        boolean hostMatch = currentUserId != null && effectiveHost != null && currentUserId.equals(effectiveHost.getId());
+        return WatchSpaceResponse.builder()
+                .id(ws.getId())
+                .name(ws.getName())
+                .status(ws.getStatus())
+                .privacy(ws.getPrivacy())
+                .inviteCode(ws.getInviteCode())
+                .maxParticipants(ws.getMaxParticipants())
+                .isLocked(ws.isLocked())
+                .aiVerbosity(ws.getAiVerbosity())
+                .votingEnabled(ws.isVotingEnabled())
+                .playbackState(ws.getPlaybackState())
+                .playbackPositionSeconds(ws.getPlaybackPositionSeconds())
+                .playbackUpdatedAt(ws.getPlaybackUpdatedAt())
+                .title(TitleResponse.fromEntity(effectiveTitle))
+                .hostUser(UserResponse.fromEntity(effectiveHost))
                 .participantCount(participantCount)
                 .isHost(hostMatch)
                 .createdAt(ws.getCreatedAt())

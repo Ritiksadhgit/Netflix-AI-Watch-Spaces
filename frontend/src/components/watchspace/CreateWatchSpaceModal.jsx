@@ -4,7 +4,7 @@ import { watchSpaceService } from '../../services/watchSpaceService';
 import { useToast } from '../../context/ToastContext';
 
 export default function CreateWatchSpaceModal({ isOpen, onClose, onCreated, preselectedTitleId }) {
-  const { addToast } = useToast();
+  const toast = useToast();
   const [titles, setTitles] = useState([]);
   const [loadingTitles, setLoadingTitles] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,11 +41,11 @@ export default function CreateWatchSpaceModal({ isOpen, onClose, onCreated, pres
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTitleId) {
-      addToast('Please select a title to watch', 'error');
+      toast.error('Please select a title to watch');
       return;
     }
     if (!name.trim()) {
-      addToast('Please enter a Watch Space name', 'error');
+      toast.error('Please enter a Watch Space name');
       return;
     }
 
@@ -61,13 +61,13 @@ export default function CreateWatchSpaceModal({ isOpen, onClose, onCreated, pres
       };
 
       const newSpace = await watchSpaceService.createWatchSpace(payload);
-      addToast('Watch Space created successfully!', 'success');
+      toast.success('Watch Space created successfully!');
       if (onCreated) {
         onCreated(newSpace);
       }
       onClose();
     } catch (err) {
-      addToast(err.detail || err.message || 'Failed to create Watch Space', 'error');
+      toast.error(err.detail || err.message || 'Failed to create Watch Space');
     } finally {
       setIsSubmitting(false);
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -10,13 +10,16 @@ import TriviaOverlay from '../components/player/TriviaOverlay';
 import NarrativeVotingOverlay from '../components/player/NarrativeVotingOverlay';
 import SessionAnalyticsModal from '../components/analytics/SessionAnalyticsModal';
 import { interactionService } from '../services/interactionService';
-import { BarChart3 } from 'lucide-react';
+import { tokenStorage } from '../utils/tokenStorage';
+import { BarChart3, Copy, Check, Share2 } from 'lucide-react';
 
 export default function WatchSpacePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user, token: authToken } = useAuth();
+  const token = authToken || tokenStorage.getAccessToken();
   const { addToast } = useToast();
+  const currentUserId = user?.id ?? user?.userId;
 
   const [space, setSpace] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,6 +29,8 @@ export default function WatchSpacePage() {
   const [aiInput, setAiInput] = useState('');
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const [aiHistory, setAiHistory] = useState([
     {
@@ -41,18 +46,20 @@ export default function WatchSpacePage() {
   const typingTimeoutRef = useRef(null);
 
   // Handle action rejected callback
-  const handleActionRejected = (payload) => {
-    addToast(payload.reason || 'Action rejected', 'error');
-  };
+  const handleActionRejected = useCallback((payload) => {
+    addToast(payload?.reason || 'Action rejected', 'error');
+  }, [addToast]);
 
   // Handle moderation action callback
-  const handleModerationAction = (payload) => {
+  const handleModerationAction = useCallback((payload) => {
+    if (!payload) return;
+    const isTargetMe = currentUserId != null && String(payload.targetUserId) === String(currentUserId);
     if (payload.action === 'MUTE') {
-      if (payload.targetUserId === user?.id) {
+      if (isTargetMe) {
         addToast('You have been muted by the host', 'warning');
       }
     } else if (payload.action === 'UNMUTE') {
-      if (payload.targetUserId === user?.id) {
+      if (isTargetMe) {
         addToast('You have been unmuted by the host', 'success');
       }
     } else if (payload.action === 'HOST_TRANSFERRED') {
@@ -60,12 +67,12 @@ export default function WatchSpacePage() {
     } else if (payload.action === 'ROOM_LOCK') {
       addToast(payload.isLocked ? 'Room has been locked by the host' : 'Room has been unlocked', 'info');
     } else if (payload.action === 'KICK') {
-      if (payload.targetUserId === user?.id) {
+      if (isTargetMe) {
         addToast('You have been removed from the Watch Space by the host', 'error');
         navigate('/dashboard');
       }
     }
-  };
+  }, [currentUserId, addToast, navigate]);
 
   // WebSocket hook
   const {
@@ -98,7 +105,15 @@ export default function WatchSpacePage() {
     sendChatMessage,
     sendTyping,
     sendModerationAction,
+    refreshPresence,
   } = useWatchSpaceWebSocket(id, token, handleActionRejected, handleModerationAction);
+
+  // Refresh presence when switching to roster tab
+  useEffect(() => {
+    if (isConnected && activeTab === 'roster') {
+      refreshPresence();
+    }
+  }, [isConnected, activeTab, refreshPresence]);
 
   // Load Watch Space metadata
   useEffect(() => {
@@ -171,9 +186,20 @@ export default function WatchSpacePage() {
   }, [space?.title?.id, currentVideoTime]);
 
   // Determine if current user is Host
-  const currentHostId = hostUserId || space?.hostUserId;
-  const isHost = user && (user.id === currentHostId || user.role === 'ADMIN');
-  const isCurrentUserMuted = participants.find((p) => p.userId === user?.id)?.isMuted || false;
+  const currentHostId = hostUserId || space?.hostUserId || space?.hostUser?.id;
+  const isHost = Boolean(
+    space?.isHost ||
+    space?.host ||
+    (user && currentHostId != null && currentUserId != null && String(currentUserId) === String(currentHostId)) ||
+    user?.role === 'ADMIN'
+  );
+  const isCurrentUserMuted = participants.find(
+    (p) => currentUserId != null && String(p.userId) === String(currentUserId)
+  )?.isMuted || false;
+
+  const hostDisplayName = space?.hostUser?.displayName ||
+    participants.find((p) => currentHostId != null && String(p.userId) === String(currentHostId))?.displayName ||
+    'Host';
 
   // Chat message submit
   const handleSendMessage = (e) => {
@@ -220,7 +246,37 @@ export default function WatchSpacePage() {
   const copyInviteCode = () => {
     if (space?.inviteCode) {
       navigator.clipboard.writeText(space.inviteCode);
+      setCodeCopied(true);
       addToast(`Invite code ${space.inviteCode} copied to clipboard!`, 'success');
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+  };
+
+  // Share or Copy Invite Link
+  const handleShareInvite = async () => {
+    if (!space) return;
+    const inviteUrl = `${window.location.origin}/watch/${space.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join ${space.name} on Netflix AI Watch Spaces`,
+          text: `Watch ${space.title?.name || 'with me'} in synchronized stream! Invite code: ${space.inviteCode}`,
+          url: inviteUrl,
+        });
+        addToast('Invite shared!', 'success');
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setInviteCopied(true);
+      addToast('Invite link copied to clipboard!', 'success');
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      addToast('Failed to copy invite link', 'error');
     }
   };
 
@@ -301,18 +357,50 @@ export default function WatchSpacePage() {
         </div>
 
         {/* Space Controls & Metrics */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           {/* Invite Code Button */}
           <button
             onClick={copyInviteCode}
-            className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-mono text-gray-300 transition-colors"
+            className={`hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-mono transition-colors ${
+              codeCopied
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300'
+            }`}
             title="Click to copy invite code"
           >
             <span className="text-gray-500">CODE:</span>
             <span className="text-indigo-300 font-semibold">{space.inviteCode}</span>
-            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
+            {codeCopied ? (
+              <span className="flex items-center space-x-1 text-emerald-400 font-semibold">
+                <Check className="w-3.5 h-3.5" />
+                <span>Copied</span>
+              </span>
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-gray-400" />
+            )}
+          </button>
+
+          {/* Invite Button */}
+          <button
+            onClick={handleShareInvite}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
+              inviteCopied
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                : 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border-indigo-500/30'
+            }`}
+            title="Share or copy invite link"
+          >
+            {inviteCopied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Copied</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Invite</span>
+              </>
+            )}
           </button>
 
           {/* Participant count badge */}
@@ -357,7 +445,7 @@ export default function WatchSpacePage() {
                 serverTs={serverTs}
                 clockSkew={clockSkew}
                 isHost={isHost}
-                hostDisplayName={space.hostUser?.displayName || 'Host'}
+                hostDisplayName={hostDisplayName}
                 onPlaybackChange={(newState, newPos) => sendPlaybackUpdate(newState, newPos)}
                 onTimeUpdate={(t) => setCurrentVideoTime(t)}
               />
@@ -472,8 +560,8 @@ export default function WatchSpacePage() {
                 ) : (
                   messages.map((m, idx) => {
                     const isSystem = m.msgType === 'SYSTEM';
-                    const isSenderHost = m.userId === currentHostId;
-                    const isMe = m.userId === user?.id;
+                    const isSenderHost = currentHostId != null && String(m.userId) === String(currentHostId);
+                    const isMe = currentUserId != null && String(m.userId) === String(currentUserId);
 
                     if (isSystem) {
                       return (
@@ -564,8 +652,8 @@ export default function WatchSpacePage() {
 
               <div className="space-y-2">
                 {participants.map((p) => {
-                  const participantIsHost = p.userId === currentHostId;
-                  const isMe = p.userId === user?.id;
+                  const participantIsHost = currentHostId != null && String(p.userId) === String(currentHostId);
+                  const isMe = currentUserId != null && String(p.userId) === String(currentUserId);
 
                   return (
                     <div

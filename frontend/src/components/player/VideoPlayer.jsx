@@ -19,6 +19,7 @@ export default function VideoPlayer({
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(playbackState === 'PLAYING');
   const [bufferedPercent, setBufferedPercent] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -58,6 +59,20 @@ export default function VideoPlayer({
     const elapsedSinceServerTs = Math.max(0, (Date.now() - serverTs - clockSkew) / 1000);
     const targetPos = isPlaying ? authoritativePosition + elapsedSinceServerTs : authoritativePosition;
 
+    const safePlay = () => {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Playback autoplay policy prevented unmuted play, trying muted:', err);
+          video.muted = true;
+          setIsMuted(true);
+          video.play().catch((err2) => {
+            console.warn('Playback autoplay policy prevented muted play:', err2);
+          });
+        });
+      }
+    };
+
     // 1. Play/Pause state synchronization
     if (!isPlaying && !video.paused) {
       video.pause();
@@ -68,9 +83,11 @@ export default function VideoPlayer({
       if (Math.abs(video.currentTime - targetPos) > 0.25) {
         video.currentTime = targetPos;
       }
-      video.play().catch((err) => {
-        console.warn('Playback autoplay policy prevented play:', err);
-      });
+      safePlay();
+    } else if (isPlaying && !video.paused) {
+      if (Math.abs(video.currentTime - targetPos) > 0.25) {
+        video.currentTime = targetPos;
+      }
     }
 
     // 2. Continuous drift checking loop
@@ -91,6 +108,10 @@ export default function VideoPlayer({
         video.playbackRate = 1.0;
         setSyncStatus('IN_SYNC');
         return;
+      }
+
+      if (isPlaying && video.paused) {
+        safePlay();
       }
 
       if (drift > 0.25) {
@@ -116,25 +137,58 @@ export default function VideoPlayer({
     return () => clearInterval(syncInterval);
   }, [playbackState, authoritativePosition, serverTs, clockSkew, isHost]);
 
+  // Sync isPlaying state with playbackState prop
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      setIsPlaying(!video.paused);
+    } else {
+      setIsPlaying(playbackState === 'PLAYING');
+    }
+  }, [playbackState]);
+
   // Host Play/Pause toggle
   const togglePlayPause = () => {
     const video = videoRef.current;
     if (!video) return;
 
     if (!isHost) {
+      if (video.muted) {
+        video.muted = false;
+        setIsMuted(false);
+      }
       setHostNotice(`Authoritative playback is controlled by ${hostDisplayName}`);
       setTimeout(() => setHostNotice(''), 3000);
       return;
     }
 
     if (video.paused) {
-      video.play().then(() => {
-        if (onPlaybackChange) {
-          onPlaybackChange('PLAYING', video.currentTime);
-        }
-      }).catch((e) => console.error(e));
+      setIsPlaying(true);
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          setIsPlaying(true);
+          if (onPlaybackChange) {
+            onPlaybackChange('PLAYING', video.currentTime);
+          }
+        }).catch((e) => {
+          console.warn('Host unmuted play failed, falling back to muted:', e);
+          video.muted = true;
+          setIsMuted(true);
+          video.play().then(() => {
+            setIsPlaying(true);
+            if (onPlaybackChange) {
+              onPlaybackChange('PLAYING', video.currentTime);
+            }
+          }).catch((err2) => {
+            console.error('Host playback failed:', err2);
+            setIsPlaying(false);
+          });
+        });
+      }
     } else {
       video.pause();
+      setIsPlaying(false);
       if (onPlaybackChange) {
         onPlaybackChange('PAUSED', video.currentTime);
       }
@@ -294,6 +348,16 @@ export default function VideoPlayer({
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
       applySubtitleTrackMode(activeTrackLang);
+      if (!isHost && playbackState === 'PLAYING' && videoRef.current.paused) {
+        const p = videoRef.current.play();
+        if (p !== undefined) {
+          p.catch(() => {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            videoRef.current.play().catch(() => {});
+          });
+        }
+      }
     }
   };
 
@@ -301,7 +365,7 @@ export default function VideoPlayer({
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
-      onMouseLeave={() => playbackState === 'PLAYING' && setShowControls(false)}
+      onMouseLeave={() => isPlaying && setShowControls(false)}
       className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl select-none group border border-white/10"
     >
       {/* HTML5 Video Element with WebVTT Subtitle Tracks */}
@@ -310,11 +374,17 @@ export default function VideoPlayer({
         src={src}
         poster={poster}
         playsInline
-        preload="metadata"
+        preload="auto"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
+        onPlay={() => setIsPlaying(true)}
+        onPlaying={() => {
+          setIsPlaying(true);
+          setIsBuffering(false);
+        }}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
         onWaiting={() => setIsBuffering(true)}
-        onPlaying={() => setIsBuffering(false)}
         onClick={togglePlayPause}
         className="w-full h-full object-cover cursor-pointer"
       >
@@ -439,9 +509,10 @@ export default function VideoPlayer({
               className={`p-2 rounded-lg text-white hover:text-indigo-400 hover:bg-white/10 transition-colors ${
                 !isHost ? 'opacity-60 cursor-pointer' : ''
               }`}
-              title={isHost ? (playbackState === 'PLAYING' ? 'Pause' : 'Play') : 'Playback locked to host'}
+              title={isHost ? (isPlaying ? 'Pause' : 'Play') : 'Playback locked to host'}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
             >
-              {playbackState === 'PLAYING' ? (
+              {isPlaying ? (
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                 </svg>

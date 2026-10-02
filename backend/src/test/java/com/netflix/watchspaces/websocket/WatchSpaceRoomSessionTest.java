@@ -130,4 +130,25 @@ class WatchSpaceRoomSessionTest {
         Map<String, Object> snapshot = roomSession.getPlaybackSnapshot();
         assertEquals(true, snapshot.get("isLocked"));
     }
+
+    @Test
+    @DisplayName("getPresencePayload returns accurate roster snapshot on join and disconnect")
+    void testGetPresencePayload() {
+        roomSession.addParticipant("sess_host", hostUserId, "Elena (Party Host)", null, "HOST");
+        roomSession.addParticipant("sess_viewer", viewerUserId, "Marcus (Viewer)", null, "VIEWER");
+
+        Map<String, Object> presence = roomSession.getPresencePayload();
+        assertNotNull(presence);
+        assertEquals(2, presence.get("count"));
+        assertEquals(hostUserId, presence.get("hostUserId"));
+
+        @SuppressWarnings("unchecked")
+        java.util.List<Map<String, Object>> participants = (java.util.List<Map<String, Object>>) presence.get("participants");
+        assertEquals(2, participants.size());
+
+        // Participant leaves
+        roomSession.removeParticipant("sess_viewer");
+        Map<String, Object> presenceAfterLeave = roomSession.getPresencePayload();
+        assertEquals(1, presenceAfterLeave.get("count"));
+    }
 }

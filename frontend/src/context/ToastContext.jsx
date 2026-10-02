@@ -10,7 +10,7 @@ export function ToastProvider({ children }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const addToast = useCallback((type, message, title, duration = 4000) => {
+  const triggerToast = useCallback((type, message, title, duration = 4000) => {
     const id = Math.random().toString(36).substring(2, 9);
     const newToast = { id, type, message, title, duration };
     setToasts((prev) => [...prev, newToast]);
@@ -22,12 +22,26 @@ export function ToastProvider({ children }) {
     }
   }, [removeToast]);
 
-  const toast = {
-    success: (message, title) => addToast('success', message, title),
-    error: (message, title) => addToast('error', message, title),
-    warning: (message, title) => addToast('warning', message, title),
-    info: (message, title) => addToast('info', message, title),
-  };
+  const addToast = useCallback((messageOrType, typeOrMessage, title, duration) => {
+    const validTypes = ['success', 'error', 'warning', 'info'];
+    if (validTypes.includes(messageOrType)) {
+      triggerToast(messageOrType, typeOrMessage, title, duration);
+    } else {
+      const type = validTypes.includes(typeOrMessage) ? typeOrMessage : 'info';
+      triggerToast(type, messageOrType, title, duration);
+    }
+  }, [triggerToast]);
+
+  const toast = Object.assign(
+    (message, type, title) => addToast(message, type, title),
+    {
+      success: (message, title) => triggerToast('success', message, title),
+      error: (message, title) => triggerToast('error', message, title),
+      warning: (message, title) => triggerToast('warning', message, title),
+      info: (message, title) => triggerToast('info', message, title),
+      addToast,
+    }
+  );
 
   return (
     <ToastContext.Provider value={toast}>

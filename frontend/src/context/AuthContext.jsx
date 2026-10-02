@@ -6,14 +6,17 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(tokenStorage.getUser());
+  const [token, setToken] = useState(tokenStorage.getAccessToken());
   const [loading, setLoading] = useState(true);
 
   const initAuth = useCallback(async () => {
-    const token = tokenStorage.getAccessToken();
-    if (!token) {
+    const accessToken = tokenStorage.getAccessToken();
+    if (!accessToken) {
+      setToken(null);
       setLoading(false);
       return;
     }
+    setToken(accessToken);
 
     try {
       const profile = await authService.getMe();
@@ -22,6 +25,7 @@ export function AuthProvider({ children }) {
     } catch {
       tokenStorage.clearAll();
       setUser(null);
+      setToken(null);
     } finally {
       setLoading(false);
     }
@@ -32,6 +36,7 @@ export function AuthProvider({ children }) {
 
     const handleUnauthorized = () => {
       setUser(null);
+      setToken(null);
       tokenStorage.clearAll();
     };
 
@@ -44,6 +49,7 @@ export function AuthProvider({ children }) {
     tokenStorage.setAccessToken(res.accessToken);
     tokenStorage.setRefreshToken(res.refreshToken);
     tokenStorage.setUser(res.user);
+    setToken(res.accessToken);
     setUser(res.user);
     return res.user;
   };
@@ -53,6 +59,7 @@ export function AuthProvider({ children }) {
     tokenStorage.setAccessToken(res.accessToken);
     tokenStorage.setRefreshToken(res.refreshToken);
     tokenStorage.setUser(res.user);
+    setToken(res.accessToken);
     setUser(res.user);
     return res.user;
   };
@@ -63,6 +70,7 @@ export function AuthProvider({ children }) {
     } finally {
       tokenStorage.clearAll();
       setUser(null);
+      setToken(null);
     }
   };
 
@@ -81,6 +89,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
+        token: token || tokenStorage.getAccessToken(),
         loading,
         isAuthenticated,
         isHost,

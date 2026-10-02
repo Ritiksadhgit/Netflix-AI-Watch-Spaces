@@ -102,9 +102,19 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                 room.getPlaybackSnapshot()
         ));
 
-        // 2. Outgoing stream combining initial snapshot, direct replies, and room broadcasts
+        // 2. Initial Presence Snapshot on join
+        String initialPresenceJson = serializeEnvelope(WebSocketEnvelope.of(
+                "room.presence.update",
+                watchSpaceId,
+                room.getPresencePayload()
+        ));
+
+        // 3. Outgoing stream combining initial snapshot, initial presence, direct replies, and room broadcasts
         Flux<WebSocketMessage> outputMessages = Flux.concat(
-                Flux.just(session.textMessage(initialSnapshotJson)),
+                Flux.just(
+                        session.textMessage(initialSnapshotJson),
+                        session.textMessage(initialPresenceJson)
+                ),
                 Flux.merge(directReplySink.asFlux(), room.getBroadcastFlux())
                         .map(session::textMessage)
         );
@@ -170,6 +180,12 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                         "room.sync.pong",
                         watchSpaceId,
                         pong
+                )));
+            } else if ("room.presence.get".equals(event)) {
+                directReplySink.tryEmitNext(serializeEnvelope(WebSocketEnvelope.of(
+                        "room.presence.update",
+                        watchSpaceId,
+                        room.getPresencePayload()
                 )));
             } else if ("room.chat.message".equals(event)) {
                 if (room.isUserMuted(userId)) {

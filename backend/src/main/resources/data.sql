@@ -27,10 +27,11 @@ INSERT IGNORE INTO variation_options (id, timeline_event_id, label, asset_ref, v
 (2, 5, 'Overcharge Sniper Railgun Battery', 'branch_railgun', 0),
 (3, 5, 'Scramble Electronic Drone Decoys', 'branch_decoys', 0);
 
--- Seed Sample Watch Spaces
+-- Seed Sample Watch Spaces (3 distinct demo spaces across all 3 titles)
 INSERT IGNORE INTO watch_spaces (id, title_id, host_user_id, name, status, privacy, invite_code, max_participants, is_locked, ai_verbosity, voting_enabled, playback_state, playback_position_seconds) VALUES
 ('ws_demo_live', 1, 2, 'Cyberpunk Sci-Fi Premiere Watch', 'LIVE', 'PUBLIC', 'CYBER-2026', 50, FALSE, 'NORMAL', TRUE, 'PAUSED', 45.0),
-('ws_demo_sintel', 2, 2, 'Fantasy Quest Friday', 'SCHEDULED', 'PUBLIC', 'QUEST-7712', 30, FALSE, 'CHATTY', TRUE, 'PAUSED', 0.0);
+('ws_demo_sintel', 2, 2, 'Fantasy Quest Friday', 'LIVE', 'PUBLIC', 'QUEST-7712', 30, FALSE, 'CHATTY', TRUE, 'PAUSED', 0.0),
+('ws_demo_bunny', 3, 2, 'Woodland Comedy Animation Showcase', 'LIVE', 'PUBLIC', 'BUNNY-9900', 25, FALSE, 'NORMAL', TRUE, 'PAUSED', 0.0);
 
 -- Seed Sample Participants
 INSERT IGNORE INTO watch_space_participants (id, watch_space_id, user_id, is_muted, role_in_room) VALUES

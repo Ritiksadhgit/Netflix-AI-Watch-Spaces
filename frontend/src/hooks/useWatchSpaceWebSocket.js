@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { tokenStorage } from '../utils/tokenStorage';
 
-export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, onModerationAction) {
+export function useWatchSpaceWebSocket(watchSpaceId, tokenProp, onActionRejected, onModerationAction) {
+  const token = tokenProp || tokenStorage.getAccessToken();
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -36,6 +38,11 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
   const pingIntervalRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const isManuallyClosedRef = useRef(false);
+
+  const onActionRejectedRef = useRef(onActionRejected);
+  onActionRejectedRef.current = onActionRejected;
+  const onModerationActionRef = useRef(onModerationAction);
+  onModerationActionRef.current = onModerationAction;
 
   // Send envelope helper
   const sendEnvelope = useCallback((event, payload = {}) => {
@@ -73,8 +80,9 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
         sendEnvelope('room.sync.ping', { clientSendTs: Date.now() });
       }, 5000);
 
-      // Immediate initial ping
+      // Immediate initial ping and presence fetch
       sendEnvelope('room.sync.ping', { clientSendTs: Date.now() });
+      sendEnvelope('room.presence.get', {});
     };
 
     ws.onmessage = (event) => {
@@ -87,7 +95,7 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
             setPlaybackState(payload.state || 'PAUSED');
             setPlaybackPosition(payload.position || 0.0);
             setServerTs(payload.serverTs || Date.now());
-            if (payload.hostUserId) setHostUserId(payload.hostUserId);
+            if (payload.hostUserId != null) setHostUserId(payload.hostUserId);
             if (payload.isLocked !== undefined) setIsLocked(payload.isLocked);
           }
         } else if (evtType === 'room.playback.update') {
@@ -100,7 +108,7 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
           if (payload) {
             setParticipants(payload.participants || []);
             setParticipantCount(payload.count || (payload.participants ? payload.participants.length : 0));
-            if (payload.hostUserId) setHostUserId(payload.hostUserId);
+            if (payload.hostUserId != null) setHostUserId(payload.hostUserId);
             if (payload.isLocked !== undefined) setIsLocked(payload.isLocked);
           }
         } else if (evtType === 'room.sync.pong') {
@@ -138,12 +146,12 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
           }
         } else if (evtType === 'room.action.rejected') {
           setIsAiThinking(false);
-          if (onActionRejected) {
-            onActionRejected(payload);
+          if (onActionRejectedRef.current) {
+            onActionRejectedRef.current(payload);
           }
         } else if (evtType === 'room.moderation.action') {
-          if (onModerationAction) {
-            onModerationAction(payload);
+          if (onModerationActionRef.current) {
+            onModerationActionRef.current(payload);
           }
         } else if (evtType === 'room.variation.voteOpen') {
           if (payload) {
@@ -197,7 +205,7 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
         });
       }
     };
-  }, [watchSpaceId, token, sendEnvelope, onActionRejected, onModerationAction]);
+  }, [watchSpaceId, token, sendEnvelope]);
 
   useEffect(() => {
     isManuallyClosedRef.current = false;
@@ -273,6 +281,10 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
     setVariationResult(null);
   }, []);
 
+  const refreshPresence = useCallback(() => {
+    sendEnvelope('room.presence.get', {});
+  }, [sendEnvelope]);
+
   return {
     isConnected,
     isConnecting,
@@ -304,5 +316,6 @@ export function useWatchSpaceWebSocket(watchSpaceId, token, onActionRejected, on
     sendChatMessage,
     sendTyping,
     sendModerationAction,
+    refreshPresence,
   };
 }

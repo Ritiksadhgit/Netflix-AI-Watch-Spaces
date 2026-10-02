@@ -176,7 +176,7 @@ public class WatchSpaceRoomSession {
         }
     }
 
-    public void broadcastPresence() {
+    public synchronized Map<String, Object> getPresencePayload() {
         List<Map<String, Object>> roster = new ArrayList<>();
         for (ParticipantInfo p : sessions.values()) {
             Map<String, Object> item = new HashMap<>();
@@ -195,8 +195,11 @@ public class WatchSpaceRoomSession {
         payload.put("count", roster.size());
         payload.put("hostUserId", hostUserId);
         payload.put("isLocked", isLocked);
+        return payload;
+    }
 
-        broadcast(WebSocketEnvelope.of("room.presence.update", watchSpaceId, payload));
+    public synchronized void broadcastPresence() {
+        broadcast(WebSocketEnvelope.of("room.presence.update", watchSpaceId, getPresencePayload()));
     }
 
     public Map<String, Object> getPlaybackSnapshot() {

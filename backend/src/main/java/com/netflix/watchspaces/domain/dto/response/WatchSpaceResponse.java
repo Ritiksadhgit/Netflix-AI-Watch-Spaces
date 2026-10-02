@@ -9,6 +9,7 @@ import com.netflix.watchspaces.domain.enums.PrivacyType;
 import com.netflix.watchspaces.domain.enums.WatchSpaceStatus;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class WatchSpaceResponse {
     private String id;
@@ -189,10 +190,16 @@ public class WatchSpaceResponse {
     public UserResponse getHostUser() { return hostUser; }
     public void setHostUser(UserResponse hostUser) { this.hostUser = hostUser; }
 
+    public Long getHostUserId() { return hostUser != null ? hostUser.getId() : null; }
+    public void setHostUserId(Long hostUserId) {}
+
     public int getParticipantCount() { return participantCount; }
     public void setParticipantCount(int participantCount) { this.participantCount = participantCount; }
 
+    @JsonProperty("isHost")
     public boolean isHost() { return isHost; }
+
+    @JsonProperty("isHost")
     public void setHost(boolean host) { isHost = host; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }

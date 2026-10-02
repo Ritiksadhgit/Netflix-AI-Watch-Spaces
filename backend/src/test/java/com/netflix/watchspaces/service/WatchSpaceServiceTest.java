@@ -101,6 +101,7 @@ public class WatchSpaceServiceTest {
                     assertEquals("Tears of Steel", response.getTitle().getName());
                     assertNotNull(response.getHostUser());
                     assertEquals(10L, response.getHostUser().getId());
+                    assertEquals(10L, response.getHostUserId());
                     assertEquals("Host User", response.getHostUser().getDisplayName());
                     assertTrue(response.isHost());
                     assertEquals(1, response.getParticipantCount());
@@ -133,6 +134,7 @@ public class WatchSpaceServiceTest {
                 .assertNext(res -> {
                     assertEquals("ws_test_1", res.getId());
                     assertEquals("Existing Space", res.getName());
+                    assertEquals(10L, res.getHostUserId());
                     assertTrue(res.isHost());
                 })
                 .verifyComplete();

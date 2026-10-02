@@ -27,7 +27,8 @@ import {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { addToast } = useToast();
+  const toast = useToast();
+  const addToast = toast.addToast || toast;
   const navigate = useNavigate();
 
   const [activeSpaces, setActiveSpaces] = useState([]);
@@ -77,7 +78,7 @@ export default function DashboardPage() {
     watchSpaceService.getActiveSpaces()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map((ws) => ({
+          const mapped = data.slice(0, 3).map((ws) => ({
             id: ws.id,
             name: ws.name,
             titleName: ws.title?.name || 'Feature Title',
@@ -192,21 +193,32 @@ export default function DashboardPage() {
       setIsJoining(true);
       const code = inviteCodeInput.trim().toUpperCase();
       const res = await watchSpaceService.joinByCode(code);
-      addToast(`Joined space: ${res.name}`, 'success');
+      if (toast?.success) {
+        toast.success(`Joined space: ${res.name}`);
+      } else if (typeof addToast === 'function') {
+        addToast(`Joined space: ${res.name}`, 'success');
+      }
       setShowJoinModal(false);
       navigate(`/watch/${res.id}`);
     } catch (err) {
       const code = inviteCodeInput.trim().toUpperCase();
       if (code === 'CYBER-2026') {
-        addToast('Entering Cyberpunk Sci-Fi Premiere Watch space...', 'success');
+        if (toast?.success) toast.success('Entering Cyberpunk Sci-Fi Premiere Watch space...');
+        else if (typeof addToast === 'function') addToast('Entering Cyberpunk Sci-Fi Premiere Watch space...', 'success');
         setShowJoinModal(false);
         navigate('/watch/ws_demo_live');
       } else if (code === 'QUEST-7712') {
-        addToast('Entering Fantasy Quest Friday space...', 'success');
+        if (toast?.success) toast.success('Entering Fantasy Quest Friday space...');
+        else if (typeof addToast === 'function') addToast('Entering Fantasy Quest Friday space...', 'success');
         setShowJoinModal(false);
         navigate('/watch/ws_demo_sintel');
       } else {
-        addToast(err.message || 'Watch Space invite code not found or expired', 'error');
+        const errorMsg = err?.detail || err?.message || 'Watch Space invite code not found or expired';
+        if (toast?.error) {
+          toast.error(errorMsg);
+        } else if (typeof addToast === 'function') {
+          addToast(errorMsg, 'error');
+        }
       }
     } finally {
       setIsJoining(false);

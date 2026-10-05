@@ -326,42 +326,57 @@ export default function WatchSpacePage() {
       )}
 
       {/* Top Header Bar */}
-      <header className="bg-obsidian-900/80 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 py-3 flex items-center justify-between z-30">
-        <div className="flex items-center space-x-4">
-          <Link
-            to="/dashboard"
-            className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-            title="Return to Dashboard"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </Link>
+      <header className="bg-obsidian-900/80 backdrop-blur-md border-b border-white/10 px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 md:gap-0 z-30">
+        {/* Navigation & Space Identity */}
+        <div className="flex items-center justify-between w-full md:w-auto">
+          <div className="flex items-center space-x-2.5 sm:space-x-4 min-w-0 flex-1">
+            <Link
+              to="/dashboard"
+              className="p-1.5 sm:p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
+              title="Return to Dashboard"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </Link>
 
-          <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate max-w-xs sm:max-w-md">
-                {space.name}
-              </h1>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-gray-300 font-medium">
-                {space.title?.ratingCode || 'PG-13'}
-              </span>
-              {isLocked && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-semibold border border-red-500/30">
-                  LOCKED
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <h1 className="text-sm sm:text-base md:text-lg font-bold text-white tracking-tight truncate">
+                  {space.name}
+                </h1>
+                <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-white/10 text-gray-300 font-medium shrink-0">
+                  {space.title?.ratingCode || 'PG-13'}
                 </span>
-              )}
+                {isLocked && (
+                  <span className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-semibold border border-red-500/30 shrink-0">
+                    LOCKED
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] sm:text-xs text-gray-400 truncate">
+                Streaming: <span className="text-indigo-400 font-semibold">{space.title?.name}</span>
+              </p>
             </div>
-            <p className="text-xs text-gray-400 truncate">Streaming: <span className="text-indigo-400 font-semibold">{space.title?.name}</span></p>
+          </div>
+
+          {/* Mobile Leave Button */}
+          <div className="flex items-center md:hidden shrink-0 ml-2">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-2.5 py-1 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold border border-red-500/20 transition-colors"
+            >
+              Leave
+            </button>
           </div>
         </div>
 
-        {/* Space Controls & Metrics */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          {/* Invite Code Button */}
+        {/* Space Controls & Metrics Toolbar */}
+        <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 md:gap-3 w-full md:w-auto">
+          {/* Invite Code Button (Desktop) */}
           <button
             onClick={copyInviteCode}
-            className={`hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-mono transition-colors ${
+            className={`hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-mono transition-colors ${
               codeCopied
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                 : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300'
@@ -383,7 +398,7 @@ export default function WatchSpacePage() {
           {/* Invite Button */}
           <button
             onClick={handleShareInvite}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
+            className={`flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
               inviteCopied
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                 : 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border-indigo-500/30'
@@ -404,7 +419,7 @@ export default function WatchSpacePage() {
           </button>
 
           {/* Participant count badge */}
-          <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+          <div className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>{participantCount || participants.length || 1} online</span>
           </div>
@@ -412,17 +427,17 @@ export default function WatchSpacePage() {
           {/* Session Analytics Button */}
           <button
             onClick={() => setShowAnalyticsModal(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-semibold transition-colors"
+            className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-semibold transition-colors"
             title="View Real-Time Room Analytics"
           >
             <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">Analytics</span>
+            <span>Analytics</span>
           </button>
 
-          {/* Leave Button */}
+          {/* Leave Button (Desktop) */}
           <button
             onClick={() => navigate('/dashboard')}
-            className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold border border-red-500/20 transition-colors"
+            className="hidden md:inline-flex px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold border border-red-500/20 transition-colors"
           >
             Leave
           </button>

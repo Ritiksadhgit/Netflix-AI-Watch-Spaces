@@ -24,6 +24,7 @@ export default function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
   const [currentDriftMs, setCurrentDriftMs] = useState(0);
@@ -260,18 +261,139 @@ export default function VideoPlayer({
     }
   };
 
-  // Fullscreen
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
+  // Fullscreen support (standard Fullscreen API, WebKit prefixes, iOS video fullscreen, CSS fallback)
+  const isElementFullscreen = useCallback(() => {
+    return !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+  }, []);
 
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch((err) => console.warn(err));
+  const enterFullscreen = useCallback(async () => {
+    const container = containerRef.current;
+    const video = videoRef.current;
+    if (!container) return;
+
+    try {
+      if (container.requestFullscreen) {
+        await container.requestFullscreen();
+      } else if (container.webkitRequestFullscreen) {
+        await container.webkitRequestFullscreen();
+      } else if (container.mozRequestFullScreen) {
+        await container.mozRequestFullScreen();
+      } else if (container.msRequestFullscreen) {
+        await container.msRequestFullscreen();
+      } else if (video && video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+      } else {
+        setIsPseudoFullscreen(true);
+      }
       setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch((err) => console.warn(err));
+    } catch (err) {
+      console.warn('Native requestFullscreen failed, attempting video or pseudo-fullscreen fallback:', err);
+      if (video && video.webkitEnterFullscreen) {
+        try {
+          video.webkitEnterFullscreen();
+          setIsFullscreen(true);
+          return;
+        } catch (e) {
+          console.warn('webkitEnterFullscreen also failed:', e);
+        }
+      }
+      setIsPseudoFullscreen(true);
+      setIsFullscreen(true);
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(async () => {
+    try {
+      if (isPseudoFullscreen) {
+        setIsPseudoFullscreen(false);
+      }
+      if (isElementFullscreen()) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+          await document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+          await document.msExitFullscreen();
+        }
+      }
+      if (videoRef.current && videoRef.current.webkitExitFullscreen) {
+        try {
+          videoRef.current.webkitExitFullscreen();
+        } catch {
+          // ignore
+        }
+      }
+      setIsFullscreen(false);
+    } catch (err) {
+      console.warn('Exit fullscreen error:', err);
+      setIsPseudoFullscreen(false);
       setIsFullscreen(false);
     }
-  };
+  }, [isElementFullscreen, isPseudoFullscreen]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (isFullscreen || isElementFullscreen() || isPseudoFullscreen) {
+      exitFullscreen();
+    } else {
+      enterFullscreen();
+    }
+  }, [isFullscreen, isElementFullscreen, isPseudoFullscreen, exitFullscreen, enterFullscreen]);
+
+  // Sync fullscreen state with browser events (e.g. Esc key or mobile gestures)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const active = isElementFullscreen();
+      if (!active && !isPseudoFullscreen) {
+        setIsFullscreen(false);
+      } else if (active) {
+        setIsFullscreen(true);
+      }
+    };
+
+    const handleWebkitBegin = () => setIsFullscreen(true);
+    const handleWebkitEnd = () => setIsFullscreen(false);
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    const video = videoRef.current;
+    if (video) {
+      video.addEventListener('webkitbeginfullscreen', handleWebkitBegin);
+      video.addEventListener('webkitendfullscreen', handleWebkitEnd);
+    }
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      if (video) {
+        video.removeEventListener('webkitbeginfullscreen', handleWebkitBegin);
+        video.removeEventListener('webkitendfullscreen', handleWebkitEnd);
+      }
+    };
+  }, [isElementFullscreen, isPseudoFullscreen]);
+
+  // Handle Escape key when pseudo-fullscreen fallback is active
+  useEffect(() => {
+    if (!isPseudoFullscreen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        exitFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPseudoFullscreen, exitFullscreen]);
 
   // Picture in Picture
   const togglePiP = async () => {
@@ -365,8 +487,15 @@ export default function VideoPlayer({
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
+      onTouchStart={handleMouseMove}
       onMouseLeave={() => isPlaying && setShowControls(false)}
-      className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl select-none group border border-white/10"
+      className={`relative bg-black overflow-hidden shadow-2xl select-none group transition-all duration-200 ${
+        isPseudoFullscreen
+          ? 'fixed inset-0 z-50 h-screen w-screen rounded-none border-0'
+          : isFullscreen
+          ? 'w-full h-full rounded-none border-0'
+          : 'w-full aspect-video rounded-2xl border border-white/10'
+      }`}
     >
       {/* HTML5 Video Element with WebVTT Subtitle Tracks */}
       <video
@@ -386,7 +515,9 @@ export default function VideoPlayer({
         onEnded={() => setIsPlaying(false)}
         onWaiting={() => setIsBuffering(true)}
         onClick={togglePlayPause}
-        className="w-full h-full object-cover cursor-pointer"
+        className={`w-full h-full cursor-pointer ${
+          isFullscreen || isPseudoFullscreen ? 'object-contain' : 'object-cover'
+        }`}
       >
         {subtitleTracks.map((track) => (
           <track
@@ -422,54 +553,72 @@ export default function VideoPlayer({
 
       {/* Top Header Overlay */}
       <div
-        className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between transition-opacity duration-300 z-20 ${
+        className={`absolute top-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between transition-opacity duration-300 z-20 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
           {isHost ? (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-              <span className="mr-1.5">👑</span> Host Authority Active
+            <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+              <span className="mr-1 sm:mr-1.5">👑</span> Host Authority Active
             </span>
           ) : (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/10 text-gray-300 border border-white/20">
-              <span className="mr-1.5">👤</span> Viewer (Host: {hostDisplayName})
+            <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-white/10 text-gray-300 border border-white/20 shrink-0">
+              <span className="mr-1 sm:mr-1.5">👤</span> Viewer (Host: {hostDisplayName})
             </span>
           )}
         </div>
 
-        {/* Sync SLA Drift Badge */}
-        <div className="flex items-center space-x-2">
+        {/* Sync SLA Drift Badge & Mobile Quick Fullscreen */}
+        <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
           {syncStatus === 'IN_SYNC' && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-1.5" />
               Synced ({currentDriftMs}ms)
             </span>
           )}
           {syncStatus === 'ACCELERATING' && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
               <span className="w-2 h-2 rounded-full bg-yellow-400 mr-1.5" />
               Catching up (+8% rate, {currentDriftMs}ms)
             </span>
           )}
           {syncStatus === 'DECELERATING' && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
               <span className="w-2 h-2 rounded-full bg-yellow-400 mr-1.5" />
               Slowing down (-8% rate, {currentDriftMs}ms)
             </span>
           )}
           {syncStatus === 'RESYNCING' && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
               <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping mr-1.5" />
               Resyncing (&lt;2s)
             </span>
           )}
+
+          {/* Quick Fullscreen Button in top overlay on mobile */}
+          <button
+            onClick={toggleFullscreen}
+            className="sm:hidden p-1.5 rounded-lg bg-black/60 border border-white/20 text-white hover:text-indigo-400 transition-colors flex items-center justify-center min-w-[32px] min-h-[32px]"
+            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            aria-label={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          >
+            {isFullscreen ? (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
 
       {/* Bottom Controls Bar */}
       <div
-        className={`absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex flex-col space-y-2 transition-opacity duration-300 z-20 ${
+        className={`absolute bottom-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex flex-col space-y-2 transition-opacity duration-300 z-20 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
@@ -502,22 +651,22 @@ export default function VideoPlayer({
         {/* Control Buttons */}
         <div className="flex items-center justify-between pt-1">
           {/* Left Controls */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1.5 sm:space-x-3 min-w-0">
             {/* Play/Pause */}
             <button
               onClick={togglePlayPause}
-              className={`p-2 rounded-lg text-white hover:text-indigo-400 hover:bg-white/10 transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-lg text-white hover:text-indigo-400 hover:bg-white/10 transition-colors shrink-0 ${
                 !isHost ? 'opacity-60 cursor-pointer' : ''
               }`}
               title={isHost ? (isPlaying ? 'Pause' : 'Play') : 'Playback locked to host'}
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                 </svg>
               ) : (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
               )}
@@ -527,10 +676,10 @@ export default function VideoPlayer({
             {isHost && (
               <button
                 onClick={() => handleSkip(-10)}
-                className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                className="p-1 sm:p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors shrink-0"
                 title="Rewind 10 seconds"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
                 </svg>
               </button>
@@ -540,29 +689,29 @@ export default function VideoPlayer({
             {isHost && (
               <button
                 onClick={() => handleSkip(10)}
-                className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                className="p-1 sm:p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors shrink-0"
                 title="Fast forward 10 seconds"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
                 </svg>
               </button>
             )}
 
             {/* Volume Control */}
-            <div className="flex items-center space-x-2 group/vol">
+            <div className="flex items-center space-x-1.5 group/vol shrink-0">
               <button
                 onClick={toggleMute}
-                className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                className="p-1 sm:p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
                 title={isMuted ? 'Unmute' : 'Mute'}
               >
                 {isMuted || volume === 0 ? (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
                   </svg>
                 ) : (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                   </svg>
                 )}
@@ -574,23 +723,23 @@ export default function VideoPlayer({
                 step="0.05"
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-16 h-1 accent-indigo-500 bg-white/20 rounded-lg cursor-pointer"
+                className="hidden sm:block w-16 h-1 accent-indigo-500 bg-white/20 rounded-lg cursor-pointer"
               />
             </div>
 
             {/* Time Display */}
-            <span className="text-xs text-gray-300 font-mono tracking-tight pl-2">
+            <span className="text-[11px] sm:text-xs text-gray-300 font-mono tracking-tight shrink-0">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
             {/* Subtitles / CC Menu Toggle */}
             <div className="relative">
               <button
                 onClick={() => setShowCcMenu((prev) => !prev)}
-                className={`px-2 py-1 rounded-md text-xs font-bold tracking-wider transition-all flex items-center space-x-1 ${
+                className={`px-1.5 sm:px-2 py-1 rounded-md text-[11px] sm:text-xs font-bold tracking-wider transition-all flex items-center space-x-1 ${
                   activeTrackLang !== 'off'
                     ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400'
                     : 'text-gray-400 hover:text-white hover:bg-white/10'
@@ -598,7 +747,7 @@ export default function VideoPlayer({
                 title="Subtitles / Closed Captions"
               >
                 <span>CC</span>
-                <span className="text-[10px] opacity-75">{activeTrackLang.toUpperCase()}</span>
+                <span className="text-[9px] sm:text-[10px] opacity-75">{activeTrackLang.toUpperCase()}</span>
               </button>
 
               {/* CC Dropdown Menu */}
@@ -639,7 +788,7 @@ export default function VideoPlayer({
             {/* Picture in Picture */}
             <button
               onClick={togglePiP}
-              className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+              className="hidden sm:inline-flex p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
               title="Picture in Picture"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -647,11 +796,12 @@ export default function VideoPlayer({
               </svg>
             </button>
 
-            {/* Fullscreen */}
+            {/* Fullscreen Button */}
             <button
               onClick={toggleFullscreen}
-              className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1.5 sm:p-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center min-w-[34px] min-h-[34px] sm:min-w-[36px] sm:min-h-[36px] shrink-0"
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              aria-label={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
               {isFullscreen ? (
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

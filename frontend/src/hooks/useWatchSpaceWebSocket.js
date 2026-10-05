@@ -61,9 +61,9 @@ export function useWatchSpaceWebSocket(watchSpaceId, tokenProp, onActionRejected
   const connect = useCallback(() => {
     if (!watchSpaceId || !token) return;
 
-   const apiUrl = import.meta.env.VITE_API_URL;
+    const apiUrl = import.meta.env.VITE_API_URL || (window.location.protocol + '//' + window.location.host);
 
-const wsBaseUrl = apiUrl.replace(/^http/, 'ws');
+    const wsBaseUrl = apiUrl.replace(/^http/, 'ws');
 
 const wsUrl = `${wsBaseUrl}/ws/watch-space?token=${encodeURIComponent(token)}&watchSpaceId=${encodeURIComponent(watchSpaceId)}`;
 

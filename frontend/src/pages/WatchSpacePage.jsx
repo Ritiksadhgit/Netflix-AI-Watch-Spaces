@@ -11,6 +11,7 @@ import NarrativeVotingOverlay from '../components/player/NarrativeVotingOverlay'
 import SessionAnalyticsModal from '../components/analytics/SessionAnalyticsModal';
 import { interactionService } from '../services/interactionService';
 import { tokenStorage } from '../utils/tokenStorage';
+import { getSubtitleTracksForTitle } from '../utils/subtitleTracks';
 import { BarChart3, Copy, Check, Share2 } from 'lucide-react';
 
 export default function WatchSpacePage() {
@@ -95,12 +96,17 @@ export default function WatchSpacePage() {
     aiAnswer,
     isAiThinking,
     askAiQuestion,
+    pinnedFact,
+    pinFact,
+    unpinFact,
     activeVariation,
     variationResult,
     sendVoteCast,
     sendFinalizeVote,
     dismissVariation,
     dismissVariationResult,
+    approvedVariant,
+    approveVariant,
     sendPlaybackUpdate,
     sendChatMessage,
     sendTyping,
@@ -461,6 +467,8 @@ export default function WatchSpacePage() {
                 clockSkew={clockSkew}
                 isHost={isHost}
                 hostDisplayName={hostDisplayName}
+                approvedVariant={approvedVariant}
+                onApproveVariant={approveVariant}
                 onPlaybackChange={(newState, newPos) => sendPlaybackUpdate(newState, newPos)}
                 onTimeUpdate={(t) => setCurrentVideoTime(t)}
               />
@@ -500,6 +508,56 @@ export default function WatchSpacePage() {
               )}
             </div>
 
+            {/* Synchronized Pinned AI Fact Card (Visible to all participants) */}
+            {pinnedFact && (
+              <div className="bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-purple-500/15 border border-amber-500/40 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-2.5 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2.5 py-0.5 bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-[11px] rounded-full uppercase tracking-wider flex items-center space-x-1.5 shadow-sm">
+                      <span>📌</span>
+                      <span>Pinned AI Fact</span>
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      Shared by <strong className="text-gray-300">{pinnedFact.pinnedBy || 'Host'}</strong>
+                    </span>
+                  </div>
+                  {isHost && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        unpinFact();
+                        addToast('Fact unpinned from Watch Space', 'info');
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-400 font-medium px-2.5 py-1 rounded-lg hover:bg-white/5 transition-colors"
+                      title="Unpin fact for all participants"
+                    >
+                      Unpin ✕
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-sm text-gray-100 font-medium leading-relaxed">
+                  {pinnedFact.text}
+                </p>
+
+                {pinnedFact.citations && pinnedFact.citations.length > 0 && (
+                  <div className="pt-2 border-t border-white/10 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider">
+                      Timeline Citations:
+                    </span>
+                    {pinnedFact.citations.map((c, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] bg-white/10 hover:bg-white/15 px-2 py-0.5 rounded text-gray-300 font-mono transition-colors"
+                      >
+                        [{c.eventType || 'Event'}] {c.title} @ {c.timestamp}s
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Title Overview Card */}
             <div className="bg-obsidian-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 space-y-3">
               <div className="flex items-start justify-between">
@@ -515,6 +573,69 @@ export default function WatchSpacePage() {
                 )}
               </div>
               <p className="text-sm text-gray-300 leading-relaxed">{space.title?.synopsis}</p>
+
+              {/* Localized Asset Variants Section */}
+              <div className="pt-4 border-t border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                      Localized Asset Variants
+                    </span>
+                    {approvedVariant && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-semibold">
+                        Room Active: {approvedVariant.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-gray-400">
+                    {isHost ? 'Host controls synchronized room variant' : 'Synchronized with Host'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {getSubtitleTracksForTitle(space.title?.id).map((variant) => {
+                    const isApproved = approvedVariant?.toLowerCase() === variant.id.toLowerCase() ||
+                      (!approvedVariant && variant.isDefault);
+
+                    return (
+                      <div
+                        key={variant.id}
+                        className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                          isApproved
+                            ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200 shadow-sm'
+                            : 'bg-white/5 border-white/10 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-white">{variant.label}</span>
+                          <span className="text-[10px] text-gray-400 uppercase font-mono">
+                            Language: {variant.lang}
+                          </span>
+                        </div>
+                        {isApproved ? (
+                          <span className="px-2 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold rounded-lg flex items-center space-x-1">
+                            <span>✓</span>
+                            <span>Active</span>
+                          </span>
+                        ) : isHost ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              approveVariant(variant.id);
+                              addToast(`Approved ${variant.label} variant for room`, 'success');
+                            }}
+                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-[10px] rounded-lg shadow transition-colors"
+                          >
+                            Approve
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-gray-500 italic">Pre-authored</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -762,6 +883,42 @@ export default function WatchSpacePage() {
                   </p>
                 </div>
 
+                {/* Active Pinned Fact in AI Feed */}
+                {pinnedFact && (
+                  <div className="p-3 bg-gradient-to-r from-amber-500/15 to-purple-500/15 border border-amber-500/40 rounded-xl space-y-1.5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-amber-300 font-bold text-xs flex items-center space-x-1">
+                          <span>📌</span>
+                          <span>Pinned Fact</span>
+                        </span>
+                        <span className="text-[10px] text-gray-400">by {pinnedFact.pinnedBy || 'Host'}</span>
+                      </div>
+                      {isHost && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            unpinFact();
+                            addToast('Fact unpinned from Watch Space', 'info');
+                          }}
+                          className="text-[10px] text-gray-400 hover:text-red-400 font-medium transition-colors"
+                          title="Unpin fact"
+                        >
+                          Unpin ✕
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-amber-100 font-medium leading-relaxed">
+                      {pinnedFact.text}
+                    </p>
+                    {pinnedFact.citations && pinnedFact.citations.length > 0 && (
+                      <div className="pt-1.5 border-t border-amber-500/20 text-[10px] text-amber-300/80 font-mono">
+                        Citations: {pinnedFact.citations.map((c) => `[${c.eventType || 'Event'}] ${c.title}`).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* AI Q&A Feed */}
                 {aiHistory.map((item, idx) => {
                   const isUser = item.role === 'user';
@@ -810,6 +967,39 @@ export default function WatchSpacePage() {
                                 </div>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Host Pin Fact Action (Host only) */}
+                        {!isUser && isHost && (
+                          <div className="pt-2 border-t border-white/10 flex items-center justify-end">
+                            {pinnedFact?.text === item.text ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  unpinFact();
+                                  addToast('Fact unpinned from Watch Space', 'info');
+                                }}
+                                className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-semibold rounded-md flex items-center space-x-1 hover:bg-amber-500/30 transition-colors"
+                                title="Click to unpin this fact"
+                              >
+                                <span>📌</span>
+                                <span>Pinned (Click to Unpin)</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  pinFact(item.text, item.sources || []);
+                                  addToast('Fact pinned for all participants!', 'success');
+                                }}
+                                className="px-2 py-0.5 bg-white/10 hover:bg-white/20 border border-white/10 text-gray-300 hover:text-white text-[10px] font-semibold rounded-md flex items-center space-x-1 transition-colors"
+                                title="Pin this AI fact to the Watch Space"
+                              >
+                                <span>📌</span>
+                                <span>Pin Fact</span>
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

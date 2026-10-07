@@ -151,4 +151,118 @@ class WatchSpaceRoomSessionTest {
         Map<String, Object> presenceAfterLeave = roomSession.getPresencePayload();
         assertEquals(1, presenceAfterLeave.get("count"));
     }
+
+    @Test
+    @DisplayName("Host can pin fact and it persists in session snapshot")
+    void testHostPinsFactSuccessfully() {
+        Map<String, Object> fact = Map.of(
+                "answer", "Thom retrofitted his cybernetic arm after the Fall of Amsterdam.",
+                "currentScene", "The Desolate Bridge of Amsterdam",
+                "timestamp", 45.0,
+                "sources", java.util.List.of(
+                        Map.of("timelineEventId", 2L, "title", "Thom (The Lead Pilot)", "eventType", "CHARACTER")
+                )
+        );
+
+        boolean success = roomSession.pinFact(fact, hostUserId, false);
+        assertTrue(success);
+        assertNotNull(roomSession.getPinnedFact());
+        assertEquals("Thom retrofitted his cybernetic arm after the Fall of Amsterdam.", roomSession.getPinnedFact().get("answer"));
+
+        Map<String, Object> snapshot = roomSession.getPlaybackSnapshot();
+        assertNotNull(snapshot.get("pinnedFact"));
+        assertEquals(fact, snapshot.get("pinnedFact"));
+    }
+
+    @Test
+    @DisplayName("Viewer cannot pin fact (rejected server-side)")
+    void testViewerPinFactRejected() {
+        Map<String, Object> fact = Map.of(
+                "answer", "Unverified fact from viewer",
+                "currentScene", "Scene 1"
+        );
+
+        boolean success = roomSession.pinFact(fact, viewerUserId, false);
+        assertFalse(success);
+        assertNull(roomSession.getPinnedFact());
+        assertNull(roomSession.getPlaybackSnapshot().get("pinnedFact"));
+    }
+
+    @Test
+    @DisplayName("Host can unpin fact")
+    void testHostUnpinsFact() {
+        Map<String, Object> fact = Map.of("answer", "Fact to be unpinned");
+        roomSession.pinFact(fact, hostUserId, false);
+        assertNotNull(roomSession.getPinnedFact());
+
+        boolean unpinned = roomSession.unpinFact(hostUserId, false);
+        assertTrue(unpinned);
+        assertNull(roomSession.getPinnedFact());
+        assertNull(roomSession.getPlaybackSnapshot().get("pinnedFact"));
+    }
+
+    @Test
+    @DisplayName("Broadcast emitted when Host pins fact")
+    void testBroadcastEmittedOnPinFact() {
+        Map<String, Object> fact = Map.of("answer", "Broadcast fact");
+
+        StepVerifier.create(roomSession.getBroadcastFlux())
+                .then(() -> roomSession.pinFact(fact, hostUserId, false))
+                .assertNext(json -> {
+                    assertTrue(json.contains("room.ai.factPinned"));
+                    assertTrue(json.contains("Broadcast fact"));
+                })
+                .thenCancel()
+                .verify();
+    }
+
+    @Test
+    @DisplayName("Host can approve localized variant and it persists in session snapshot")
+    void testHostApprovesLocalizedVariantSuccessfully() {
+        Map<String, Object> variant = Map.of(
+                "variantId", "es",
+                "label", "Español",
+                "type", "SUBTITLE"
+        );
+
+        boolean success = roomSession.approveVariant(variant, hostUserId, false);
+        assertTrue(success);
+        assertNotNull(roomSession.getApprovedVariant());
+        assertEquals("es", roomSession.getApprovedVariant().get("variantId"));
+        assertEquals("Español", roomSession.getApprovedVariant().get("label"));
+
+        Map<String, Object> snapshot = roomSession.getPlaybackSnapshot();
+        assertNotNull(snapshot.get("approvedVariant"));
+        assertEquals(variant, snapshot.get("approvedVariant"));
+    }
+
+    @Test
+    @DisplayName("Viewer cannot approve variant (rejected server-side)")
+    void testViewerApproveVariantRejected() {
+        Map<String, Object> variant = Map.of(
+                "variantId", "fr",
+                "label", "Français",
+                "type", "SUBTITLE"
+        );
+
+        boolean success = roomSession.approveVariant(variant, viewerUserId, false);
+        assertFalse(success);
+        assertNull(roomSession.getApprovedVariant());
+        assertNull(roomSession.getPlaybackSnapshot().get("approvedVariant"));
+    }
+
+    @Test
+    @DisplayName("Broadcast emitted when Host approves localized variant")
+    void testBroadcastEmittedOnVariantApproved() {
+        Map<String, Object> variant = Map.of("variantId", "es", "label", "Español");
+
+        StepVerifier.create(roomSession.getBroadcastFlux())
+                .then(() -> roomSession.approveVariant(variant, hostUserId, false))
+                .assertNext(json -> {
+                    assertTrue(json.contains("room.variant.applied"));
+                    assertTrue(json.contains("Español"));
+                })
+                .thenCancel()
+                .verify();
+    }
 }

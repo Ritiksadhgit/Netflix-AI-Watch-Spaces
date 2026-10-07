@@ -2,6 +2,7 @@ package com.netflix.watchspaces.controller;
 
 import com.netflix.watchspaces.domain.dto.request.CreateWatchSpaceRequest;
 import com.netflix.watchspaces.domain.dto.response.WatchSpaceResponse;
+import com.netflix.watchspaces.domain.enums.RoleType;
 import com.netflix.watchspaces.security.UserPrincipal;
 import com.netflix.watchspaces.service.WatchSpaceService;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -64,6 +66,64 @@ public class WatchSpaceController {
             return Mono.just(ResponseEntity.badRequest().build());
         }
         return watchSpaceService.joinByInviteCode(inviteCode, principal.getId())
+                .map(ResponseEntity::ok);
+    }
+
+    @PostMapping("/{id}/pin-fact")
+    public Mono<ResponseEntity<Map<String, Object>>> pinFact(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> fact,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) {
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+        }
+        boolean isAdmin = principal.getRole() == RoleType.ADMIN;
+        return watchSpaceService.pinFact(id, fact, principal.getId(), isAdmin)
+                .map(ResponseEntity::ok);
+    }
+
+    @DeleteMapping("/{id}/pin-fact")
+    public Mono<ResponseEntity<Void>> unpinFact(
+            @PathVariable String id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) {
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+        }
+        boolean isAdmin = principal.getRole() == RoleType.ADMIN;
+        return watchSpaceService.unpinFact(id, principal.getId(), isAdmin)
+                .then(Mono.just(ResponseEntity.noContent().<Void>build()));
+    }
+
+    @GetMapping("/{id}/pinned-fact")
+    public Mono<ResponseEntity<Map<String, Object>>> getPinnedFact(@PathVariable String id) {
+        return watchSpaceService.getPinnedFact(id)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.ok(Map.of()));
+    }
+
+    @PostMapping("/{id}/variant/approve")
+    public Mono<ResponseEntity<Map<String, Object>>> approveVariant(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> variant,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) {
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+        }
+        boolean isAdmin = principal.getRole() == RoleType.ADMIN;
+        return watchSpaceService.approveVariant(id, variant, principal.getId(), isAdmin)
+                .map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/{id}/variant/approved")
+    public Mono<ResponseEntity<Map<String, Object>>> getApprovedVariant(@PathVariable String id) {
+        return watchSpaceService.getApprovedVariant(id)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.ok(Map.of()));
+    }
+
+    @GetMapping("/{id}/variants/eligible")
+    public Mono<ResponseEntity<List<Map<String, Object>>>> getEligibleVariants(@PathVariable String id) {
+        return watchSpaceService.getEligibleVariants(id)
                 .map(ResponseEntity::ok);
     }
 }

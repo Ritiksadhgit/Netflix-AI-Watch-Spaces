@@ -11,6 +11,8 @@ export default function VideoPlayer({
   clockSkew = 0,
   isHost = false,
   hostDisplayName = 'Host',
+  approvedVariant = null,
+  onApproveVariant,
   onPlaybackChange,
   onTimeUpdate,
 }) {
@@ -440,10 +442,15 @@ export default function VideoPlayer({
   useEffect(() => {
     const tracks = getSubtitleTracksForTitle(titleId);
     setSubtitleTracks(tracks);
-    const def = tracks.find((t) => t.isDefault);
-    const initialLang = def ? def.lang : 'en';
-    setActiveTrackLang(initialLang);
-  }, [titleId]);
+    const approvedLang = approvedVariant?.variantId || approvedVariant?.id || approvedVariant?.lang;
+    if (approvedLang) {
+      setActiveTrackLang(approvedLang);
+    } else {
+      const def = tracks.find((t) => t.isDefault);
+      const initialLang = def ? def.lang : 'en';
+      setActiveTrackLang(initialLang);
+    }
+  }, [titleId, approvedVariant]);
 
   // Apply track mode changes to HTML5 text tracks (zero drift / zero interrupt)
   const applySubtitleTrackMode = useCallback((selectedLang) => {
@@ -460,6 +467,17 @@ export default function VideoPlayer({
     }
   }, []);
 
+  // When Host approves a localized variant, all participants apply it seamlessly
+  useEffect(() => {
+    if (approvedVariant) {
+      const approvedLang = approvedVariant.variantId || approvedVariant.id || approvedVariant.lang;
+      if (approvedLang) {
+        setActiveTrackLang(approvedLang);
+        applySubtitleTrackMode(approvedLang);
+      }
+    }
+  }, [approvedVariant, applySubtitleTrackMode]);
+
   const handleSelectSubtitle = (lang) => {
     setActiveTrackLang(lang);
     setShowCcMenu(false);
@@ -469,7 +487,8 @@ export default function VideoPlayer({
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
-      applySubtitleTrackMode(activeTrackLang);
+      const targetLang = approvedVariant?.variantId || approvedVariant?.id || approvedVariant?.lang || activeTrackLang;
+      applySubtitleTrackMode(targetLang);
       if (!isHost && playbackState === 'PLAYING' && videoRef.current.paused) {
         const p = videoRef.current.play();
         if (p !== undefined) {
@@ -752,9 +771,10 @@ export default function VideoPlayer({
 
               {/* CC Dropdown Menu */}
               {showCcMenu && (
-                <div className="absolute bottom-10 right-0 w-44 bg-obsidian-900/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1.5 z-40 space-y-1">
-                  <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-white/10">
-                    Audio & Subtitles
+                <div className="absolute bottom-10 right-0 w-52 bg-obsidian-900/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1.5 z-40 space-y-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-white/10 flex items-center justify-between">
+                    <span>Audio & Subtitles</span>
+                    {isHost && <span className="text-[9px] text-amber-400 font-bold">Host</span>}
                   </div>
                   <button
                     onClick={() => handleSelectSubtitle('off')}
@@ -767,20 +787,63 @@ export default function VideoPlayer({
                     <span>Off</span>
                     {activeTrackLang === 'off' && <span className="text-indigo-400">✓</span>}
                   </button>
-                  {subtitleTracks.map((track) => (
-                    <button
-                      key={track.id}
-                      onClick={() => handleSelectSubtitle(track.lang)}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                        activeTrackLang === track.lang
-                          ? 'bg-indigo-600/30 text-indigo-300 font-semibold'
-                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <span>{track.label}</span>
-                      {activeTrackLang === track.lang && <span className="text-indigo-400">✓</span>}
-                    </button>
-                  ))}
+                  {subtitleTracks.map((track) => {
+                    const isApproved = (approvedVariant?.variantId || approvedVariant?.id || 'en') === track.lang;
+                    const isSelected = activeTrackLang === track.lang;
+                    return (
+                      <div
+                        key={track.id}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                          isSelected
+                            ? 'bg-indigo-600/30 text-indigo-300 font-semibold'
+                            : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleSelectSubtitle(track.lang)}
+                          className="flex-1 text-left flex items-center space-x-1.5 truncate"
+                        >
+                          <span className="truncate">{track.label}</span>
+                          {isSelected && <span className="text-indigo-400 shrink-0">✓</span>}
+                        </button>
+
+                        {isHost ? (
+                          isApproved ? (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold shrink-0 ml-1.5">
+                              Approved
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onApproveVariant) {
+                                  onApproveVariant({
+                                    variantId: track.lang,
+                                    label: track.label,
+                                    type: 'SUBTITLE',
+                                    assetRef: track.id,
+                                  });
+                                }
+                                handleSelectSubtitle(track.lang);
+                              }}
+                              className="text-[9px] px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium shrink-0 ml-1.5 transition-colors shadow-sm"
+                              title="Approve this variant for all participants in the Watch Space"
+                            >
+                              Approve
+                            </button>
+                          )
+                        ) : (
+                          isApproved && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold shrink-0 ml-1.5">
+                              Room Sync
+                            </span>
+                          )
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

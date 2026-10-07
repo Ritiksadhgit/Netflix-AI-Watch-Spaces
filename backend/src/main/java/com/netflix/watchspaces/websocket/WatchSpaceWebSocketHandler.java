@@ -25,7 +25,9 @@ import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -109,12 +111,30 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                 room.getPresencePayload()
         ));
 
-        // 3. Outgoing stream combining initial snapshot, initial presence, direct replies, and room broadcasts
+        // 3. Initial messages list (playback snapshot, presence, plus persisted pinned fact and approved variant)
+        List<WebSocketMessage> initialMessages = new ArrayList<>();
+        initialMessages.add(session.textMessage(initialSnapshotJson));
+        initialMessages.add(session.textMessage(initialPresenceJson));
+
+        if (room.getPinnedFact() != null) {
+            initialMessages.add(session.textMessage(serializeEnvelope(WebSocketEnvelope.of(
+                    "room.ai.factPinned",
+                    watchSpaceId,
+                    room.getPinnedFact()
+            ))));
+        }
+
+        if (room.getApprovedVariant() != null) {
+            initialMessages.add(session.textMessage(serializeEnvelope(WebSocketEnvelope.of(
+                    "room.variant.applied",
+                    watchSpaceId,
+                    room.getApprovedVariant()
+            ))));
+        }
+
+        // 4. Outgoing stream combining initial messages, direct replies, and room broadcasts
         Flux<WebSocketMessage> outputMessages = Flux.concat(
-                Flux.just(
-                        session.textMessage(initialSnapshotJson),
-                        session.textMessage(initialPresenceJson)
-                ),
+                Flux.fromIterable(initialMessages),
                 Flux.merge(directReplySink.asFlux(), room.getBroadcastFlux())
                         .map(session::textMessage)
         );
@@ -315,6 +335,59 @@ public class WatchSpaceWebSocketHandler implements WebSocketHandler {
                             "targetUserId", targetUserId
                     )));
                 }
+            } else if ("room.ai.pinFact".equals(event)) {
+                boolean isHost = userId.equals(room.getHostUserId());
+                if (!isHost && !isAdmin) {
+                    Map<String, Object> err = new HashMap<>();
+                    err.put("reason", "Only the room host can pin facts");
+                    err.put("code", "FORBIDDEN_PIN_FACT");
+                    directReplySink.tryEmitNext(serializeEnvelope(WebSocketEnvelope.of(
+                            "room.action.rejected",
+                            watchSpaceId,
+                            err
+                    )));
+                    return Mono.empty();
+                }
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> fact = payload.get("fact") instanceof Map
+                        ? (Map<String, Object>) payload.get("fact")
+                        : payload;
+                room.pinFact(fact, userId, isAdmin);
+            } else if ("room.ai.unpinFact".equals(event)) {
+                boolean isHost = userId.equals(room.getHostUserId());
+                if (!isHost && !isAdmin) {
+                    Map<String, Object> err = new HashMap<>();
+                    err.put("reason", "Only the room host can unpin facts");
+                    err.put("code", "FORBIDDEN_PIN_FACT");
+                    directReplySink.tryEmitNext(serializeEnvelope(WebSocketEnvelope.of(
+                            "room.action.rejected",
+                            watchSpaceId,
+                            err
+                    )));
+                    return Mono.empty();
+                }
+
+                room.unpinFact(userId, isAdmin);
+            } else if ("room.variant.approve".equals(event)) {
+                boolean isHost = userId.equals(room.getHostUserId());
+                if (!isHost && !isAdmin) {
+                    Map<String, Object> err = new HashMap<>();
+                    err.put("reason", "Only the room host can approve localized asset variants");
+                    err.put("code", "FORBIDDEN_VARIANT_APPROVAL");
+                    directReplySink.tryEmitNext(serializeEnvelope(WebSocketEnvelope.of(
+                            "room.action.rejected",
+                            watchSpaceId,
+                            err
+                    )));
+                    return Mono.empty();
+                }
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> variant = payload.get("variant") instanceof Map
+                        ? (Map<String, Object>) payload.get("variant")
+                        : payload;
+                room.approveVariant(variant, userId, isAdmin);
             }
         } catch (Exception e) {
             log.error("Failed to parse incoming WebSocket message: {}", e.getMessage());

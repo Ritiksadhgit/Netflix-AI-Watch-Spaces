@@ -122,4 +122,62 @@ public class MultiClientSynchronizationTest {
         assertTrue(finalDrift1 < 0.050, "Client 1 should converge into < 50ms tier within 2 seconds (actual: " + (finalDrift1 * 1000) + "ms)");
         assertTrue(finalDrift2 < 0.050, "Client 2 should converge into < 50ms tier within 2 seconds (actual: " + (finalDrift2 * 1000) + "ms)");
     }
+
+    @Test
+    @DisplayName("Multi-Client Broadcast & Persistence: Fact pinning and variant approval broadcast to all viewers and persist for reconnect")
+    public void testMultiClientFactPinningAndVariantApproval() {
+        // Connect host and 2 viewers
+        roomSession.addParticipant("sess_host", hostUserId, "Host", null, "HOST");
+        roomSession.addParticipant("sess_viewer1", viewer1Id, "Viewer 1", null, "VIEWER");
+        roomSession.addParticipant("sess_viewer2", viewer2Id, "Viewer 2", null, "VIEWER");
+
+        // 1. Host pins AI fact -> broadcasts to room
+        java.util.Map<String, Object> fact = java.util.Map.of(
+                "answer", "Tears of Steel was made using Blender open-source VFX pipeline.",
+                "currentScene", "The Desolate Bridge of Amsterdam",
+                "timestamp", 95.0,
+                "sources", java.util.List.of(
+                        java.util.Map.of("timelineEventId", 3L, "eventType", "TRIVIA", "title", "Open Source VFX")
+                )
+        );
+
+        StepVerifier.create(roomSession.getBroadcastFlux().filter(json -> json.contains("room.ai.factPinned")))
+                .then(() -> roomSession.pinFact(fact, hostUserId, false))
+                .assertNext(json -> {
+                    assertTrue(json.contains("room.ai.factPinned"));
+                    assertTrue(json.contains("Tears of Steel was made using Blender"));
+                })
+                .thenCancel()
+                .verify(Duration.ofSeconds(2));
+
+        // 2. Host approves localized variant -> broadcasts to room
+        java.util.Map<String, Object> variant = java.util.Map.of(
+                "variantId", "es",
+                "label", "Español",
+                "type", "SUBTITLE"
+        );
+
+        StepVerifier.create(roomSession.getBroadcastFlux().filter(json -> json.contains("room.variant.applied")))
+                .then(() -> roomSession.approveVariant(variant, hostUserId, false))
+                .assertNext(json -> {
+                    assertTrue(json.contains("room.variant.applied"));
+                    assertTrue(json.contains("Español"));
+                })
+                .thenCancel()
+                .verify(Duration.ofSeconds(2));
+
+        // 3. Reconnecting participant receives persisted state in snapshot
+        java.util.Map<String, Object> reconnectSnapshot = roomSession.getPlaybackSnapshot();
+        assertNotNull(reconnectSnapshot.get("pinnedFact"), "Pinned fact must be persisted in snapshot");
+        assertNotNull(reconnectSnapshot.get("approvedVariant"), "Approved variant must be persisted in snapshot");
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> persistedFact = (java.util.Map<String, Object>) reconnectSnapshot.get("pinnedFact");
+        assertEquals("Tears of Steel was made using Blender open-source VFX pipeline.", persistedFact.get("answer"));
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> persistedVariant = (java.util.Map<String, Object>) reconnectSnapshot.get("approvedVariant");
+        assertEquals("es", persistedVariant.get("variantId"));
+        assertEquals("Español", persistedVariant.get("label"));
+    }
 }

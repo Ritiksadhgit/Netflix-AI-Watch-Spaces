@@ -33,6 +33,10 @@ export function useWatchSpaceWebSocket(watchSpaceId, tokenProp, onActionRejected
   const [activeVariation, setActiveVariation] = useState(null);
   const [variationResult, setVariationResult] = useState(null);
 
+  // Pinned AI Fact & Approved Localized Asset Variant
+  const [pinnedFact, setPinnedFact] = useState(null);
+  const [approvedVariant, setApprovedVariant] = useState(null);
+
   const socketRef = useRef(null);
 
   const pingIntervalRef = useRef(null);
@@ -99,6 +103,8 @@ const wsUrl = `${wsBaseUrl}/ws/watch-space?token=${encodeURIComponent(token)}&wa
             setServerTs(payload.serverTs || Date.now());
             if (payload.hostUserId != null) setHostUserId(payload.hostUserId);
             if (payload.isLocked !== undefined) setIsLocked(payload.isLocked);
+            if (payload.pinnedFact !== undefined) setPinnedFact(payload.pinnedFact);
+            if (payload.approvedVariant !== undefined) setApprovedVariant(payload.approvedVariant);
           }
         } else if (evtType === 'room.playback.update') {
           if (payload) {
@@ -181,6 +187,10 @@ const wsUrl = `${wsBaseUrl}/ws/watch-space?token=${encodeURIComponent(token)}&wa
             setVariationResult(payload);
             setActiveVariation(null);
           }
+        } else if (evtType === 'room.ai.factPinned') {
+          setPinnedFact(payload || null);
+        } else if (evtType === 'room.variant.applied' || evtType === 'room.variant.approved') {
+          setApprovedVariant(payload || null);
         }
       } catch (err) {
         console.error('Failed to parse incoming WebSocket message', err);
@@ -283,6 +293,18 @@ const wsUrl = `${wsBaseUrl}/ws/watch-space?token=${encodeURIComponent(token)}&wa
     setVariationResult(null);
   }, []);
 
+  const pinFact = useCallback((fact) => {
+    sendEnvelope('room.ai.pinFact', { fact });
+  }, [sendEnvelope]);
+
+  const unpinFact = useCallback(() => {
+    sendEnvelope('room.ai.unpinFact', {});
+  }, [sendEnvelope]);
+
+  const approveVariant = useCallback((variant) => {
+    sendEnvelope('room.variant.approve', variant);
+  }, [sendEnvelope]);
+
   const refreshPresence = useCallback(() => {
     sendEnvelope('room.presence.get', {});
   }, [sendEnvelope]);
@@ -308,12 +330,17 @@ const wsUrl = `${wsBaseUrl}/ws/watch-space?token=${encodeURIComponent(token)}&wa
     aiAnswer,
     isAiThinking,
     askAiQuestion,
+    pinnedFact,
+    pinFact,
+    unpinFact,
     activeVariation,
     variationResult,
     sendVoteCast,
     sendFinalizeVote,
     dismissVariation,
     dismissVariationResult,
+    approvedVariant,
+    approveVariant,
     sendPlaybackUpdate,
     sendChatMessage,
     sendTyping,

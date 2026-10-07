@@ -15,6 +15,7 @@ import com.netflix.watchspaces.repository.TitleRepository;
 import com.netflix.watchspaces.repository.UserRepository;
 import com.netflix.watchspaces.repository.WatchSpaceParticipantRepository;
 import com.netflix.watchspaces.repository.WatchSpaceRepository;
+import com.netflix.watchspaces.websocket.WatchSpaceRoomManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,9 @@ public class WatchSpaceServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private WatchSpaceRoomManager roomManager;
 
     @InjectMocks
     private WatchSpaceService watchSpaceService;
@@ -138,5 +142,61 @@ public class WatchSpaceServiceTest {
                     assertTrue(res.isHost());
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("pinFact - Host can pin fact, non-host receives 403 Forbidden")
+    void testPinFactHostOnly() {
+        WatchSpace space = WatchSpace.builder()
+                .id("ws_test_1")
+                .name("Space")
+                .hostUser(hostUser)
+                .build();
+
+        com.netflix.watchspaces.websocket.WatchSpaceRoomSession room = mock(com.netflix.watchspaces.websocket.WatchSpaceRoomSession.class);
+        when(watchSpaceRepository.findById("ws_test_1")).thenReturn(Optional.of(space));
+        when(roomManager.getOrCreateRoom("ws_test_1")).thenReturn(room);
+
+        java.util.Map<String, Object> fact = java.util.Map.of("answer", "Fact");
+
+        // Host (id=10L) succeeds
+        StepVerifier.create(watchSpaceService.pinFact("ws_test_1", fact, 10L, false))
+                .assertNext(res -> assertEquals("Fact", res.get("answer")))
+                .verifyComplete();
+        verify(room).pinFact(fact, 10L, false);
+
+        // Viewer (id=99L) gets 403 Forbidden
+        StepVerifier.create(watchSpaceService.pinFact("ws_test_1", fact, 99L, false))
+                .expectErrorMatches(err -> err instanceof org.springframework.web.server.ResponseStatusException &&
+                        ((org.springframework.web.server.ResponseStatusException) err).getStatusCode() == org.springframework.http.HttpStatus.FORBIDDEN)
+                .verify();
+    }
+
+    @Test
+    @DisplayName("approveVariant - Host can approve variant, non-host receives 403 Forbidden")
+    void testApproveVariantHostOnly() {
+        WatchSpace space = WatchSpace.builder()
+                .id("ws_test_1")
+                .name("Space")
+                .hostUser(hostUser)
+                .build();
+
+        com.netflix.watchspaces.websocket.WatchSpaceRoomSession room = mock(com.netflix.watchspaces.websocket.WatchSpaceRoomSession.class);
+        when(watchSpaceRepository.findById("ws_test_1")).thenReturn(Optional.of(space));
+        when(roomManager.getOrCreateRoom("ws_test_1")).thenReturn(room);
+
+        java.util.Map<String, Object> variant = java.util.Map.of("variantId", "es", "label", "Español");
+
+        // Host (id=10L) succeeds
+        StepVerifier.create(watchSpaceService.approveVariant("ws_test_1", variant, 10L, false))
+                .assertNext(res -> assertEquals("es", res.get("variantId")))
+                .verifyComplete();
+        verify(room).approveVariant(variant, 10L, false);
+
+        // Viewer (id=99L) gets 403 Forbidden
+        StepVerifier.create(watchSpaceService.approveVariant("ws_test_1", variant, 99L, false))
+                .expectErrorMatches(err -> err instanceof org.springframework.web.server.ResponseStatusException &&
+                        ((org.springframework.web.server.ResponseStatusException) err).getStatusCode() == org.springframework.http.HttpStatus.FORBIDDEN)
+                .verify();
     }
 }

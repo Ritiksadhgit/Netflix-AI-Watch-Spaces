@@ -47,6 +47,12 @@ public class WatchSpaceRoomSession {
     // Active narrative voting session
     private VotingSession activeVotingSession;
 
+    // Persisted Pinned Fact for the session
+    private volatile Map<String, Object> pinnedFact = null;
+
+    // Persisted Approved Localized Asset Variant for the session
+    private volatile Map<String, Object> approvedVariant = null;
+
     // Live session analytics counters
     private final long sessionCreatedAt = System.currentTimeMillis();
     private volatile int peakParticipants = 0;
@@ -209,7 +215,50 @@ public class WatchSpaceRoomSession {
         snapshot.put("serverTs", playbackUpdatedAt);
         snapshot.put("hostUserId", hostUserId);
         snapshot.put("isLocked", isLocked);
+        snapshot.put("pinnedFact", pinnedFact);
+        snapshot.put("approvedVariant", approvedVariant);
         return snapshot;
+    }
+
+    public synchronized boolean pinFact(Map<String, Object> fact, Long senderUserId, boolean isAdmin) {
+        if (!senderUserId.equals(hostUserId) && !isAdmin) {
+            log.warn("Unauthorized pin fact attempt on room {} by user {}", watchSpaceId, senderUserId);
+            return false;
+        }
+        this.pinnedFact = fact;
+        log.info("Host {} pinned fact in room {}", senderUserId, watchSpaceId);
+        broadcast(WebSocketEnvelope.of("room.ai.factPinned", watchSpaceId, fact));
+        return true;
+    }
+
+    public synchronized boolean unpinFact(Long senderUserId, boolean isAdmin) {
+        if (!senderUserId.equals(hostUserId) && !isAdmin) {
+            log.warn("Unauthorized unpin fact attempt on room {} by user {}", watchSpaceId, senderUserId);
+            return false;
+        }
+        this.pinnedFact = null;
+        log.info("Host {} unpinned fact in room {}", senderUserId, watchSpaceId);
+        broadcast(WebSocketEnvelope.of("room.ai.factPinned", watchSpaceId, null));
+        return true;
+    }
+
+    public Map<String, Object> getPinnedFact() {
+        return pinnedFact;
+    }
+
+    public synchronized boolean approveVariant(Map<String, Object> variant, Long senderUserId, boolean isAdmin) {
+        if (!senderUserId.equals(hostUserId) && !isAdmin) {
+            log.warn("Unauthorized variant approval attempt on room {} by user {}", watchSpaceId, senderUserId);
+            return false;
+        }
+        this.approvedVariant = variant;
+        log.info("Host {} approved localized asset variant in room {}: {}", senderUserId, watchSpaceId, variant);
+        broadcast(WebSocketEnvelope.of("room.variant.applied", watchSpaceId, variant));
+        return true;
+    }
+
+    public Map<String, Object> getApprovedVariant() {
+        return approvedVariant;
     }
 
     // Trivia deduplication

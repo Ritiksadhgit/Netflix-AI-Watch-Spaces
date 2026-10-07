@@ -20,4 +20,7 @@ public interface WatchSpaceRepository extends JpaRepository<WatchSpace, String> 
 
     @EntityGraph(attributePaths = {"title", "hostUser"})
     List<WatchSpace> findByStatus(WatchSpaceStatus status);
+
+    @EntityGraph(attributePaths = {"title", "hostUser"})
+    List<WatchSpace> findByStatusOrderByCreatedAtDesc(WatchSpaceStatus status);
 }

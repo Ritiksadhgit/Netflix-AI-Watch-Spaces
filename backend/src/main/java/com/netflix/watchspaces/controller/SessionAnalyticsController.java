@@ -24,4 +24,9 @@ public class SessionAnalyticsController {
     public Mono<SessionAnalyticsResponse> reconcileSessionAnalytics(@PathVariable String watchSpaceId) {
         return sessionAnalyticsService.reconcileAndSaveSessionAnalytics(watchSpaceId);
     }
+
+    @GetMapping("/dashboard")
+    public Mono<com.netflix.watchspaces.domain.dto.response.DashboardStatsResponse> getDashboardStats() {
+        return sessionAnalyticsService.getDashboardStats();
+    }
 }

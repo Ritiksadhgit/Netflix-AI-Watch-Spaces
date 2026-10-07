@@ -25,8 +25,11 @@ import reactor.core.scheduler.Schedulers;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -108,14 +111,52 @@ public class WatchSpaceService {
 
     public Flux<WatchSpaceResponse> getActivePublicSpaces(Long currentUserId) {
         return Mono.fromCallable(() -> {
-            List<WatchSpace> spaces = watchSpaceRepository.findByStatus(WatchSpaceStatus.LIVE);
-            return spaces.stream()
-                    .filter(s -> s.getPrivacy() != null && s.getPrivacy().name().equals("PUBLIC"))
-                    .map(s -> {
-                        int count = participantRepository.findActiveByWatchSpaceId(s.getId()).size();
-                        return WatchSpaceResponse.fromEntity(s, count, currentUserId);
-                    })
-                    .collect(Collectors.toList());
+            List<WatchSpace> spaces = watchSpaceRepository.findByStatusOrderByCreatedAtDesc(WatchSpaceStatus.LIVE);
+            Set<String> seenIds = new HashSet<>();
+            Set<String> seenHostTitleKeys = new HashSet<>();
+            List<WatchSpaceResponse> result = new ArrayList<>();
+            LocalDateTime twoHoursAgo = LocalDateTime.now().minusHours(2);
+
+            for (WatchSpace s : spaces) {
+                if (s == null || s.getId() == null) continue;
+                if (!seenIds.add(s.getId())) continue;
+
+                if (s.getStatus() != WatchSpaceStatus.LIVE) continue;
+                if (s.getPrivacy() == null || !"PUBLIC".equalsIgnoreCase(s.getPrivacy().name())) continue;
+                if (s.getEndedAt() != null) continue;
+
+                Optional<WatchSpaceRoomSession> roomOpt = roomManager.getRoom(s.getId());
+                boolean hasActiveConnectedParticipants = roomOpt.isPresent() && !roomOpt.get().getParticipants().isEmpty();
+                boolean isSeededDemo = s.getId().startsWith("ws_demo_");
+                boolean isRecentlyCreated = s.getCreatedAt() != null && s.getCreatedAt().isAfter(twoHoursAgo);
+
+                // Genuinely active criteria: currently active WebSocket session, seeded demo space, or recently created room
+                if (!hasActiveConnectedParticipants && !isSeededDemo && !isRecentlyCreated) {
+                    continue; // Skip stale/abandoned inactive spaces
+                }
+
+                // Deduplicate identical title/host spaces created repeatedly without active viewers
+                if (!hasActiveConnectedParticipants) {
+                    Long hostId = s.getHostUser() != null ? s.getHostUser().getId() : 0L;
+                    Long titleId = s.getTitle() != null ? s.getTitle().getId() : 0L;
+                    String hostTitleKey = hostId + "_" + titleId + "_" + (s.getName() != null ? s.getName().trim() : "");
+                    if (!seenHostTitleKeys.add(hostTitleKey)) {
+                        continue; // Skip duplicate room for the same title & host
+                    }
+                }
+
+                int participantCount;
+                if (hasActiveConnectedParticipants) {
+                    participantCount = roomOpt.get().getParticipants().size();
+                } else {
+                    int dbCount = participantRepository.findActiveByWatchSpaceId(s.getId()).size();
+                    participantCount = Math.max(dbCount, 1);
+                }
+
+                result.add(WatchSpaceResponse.fromEntity(s, participantCount, currentUserId));
+            }
+
+            return result;
         }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(Flux::fromIterable);
     }
 

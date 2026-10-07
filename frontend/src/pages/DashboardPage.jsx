@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { watchSpaceService } from '../services/watchSpaceService';
 import { recommendationService } from '../services/recommendationService';
 import { interactionService } from '../services/interactionService';
+import { analyticsService } from '../services/analyticsService';
 import CreateWatchSpaceModal from '../components/watchspace/CreateWatchSpaceModal';
 import SessionAnalyticsModal from '../components/analytics/SessionAnalyticsModal';
 import GlassCard from '../components/common/GlassCard';
@@ -33,6 +34,8 @@ export default function DashboardPage() {
 
   const [activeSpaces, setActiveSpaces] = useState([]);
   const [loadingSpaces, setLoadingSpaces] = useState(true);
+  const [stats, setStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
   const [recommendations, setRecommendations] = useState([]);
   const [loadingRecs, setLoadingRecs] = useState(true);
   const [continueWatching, setContinueWatching] = useState([]);
@@ -48,56 +51,48 @@ export default function DashboardPage() {
   const [analyticsTargetSpace, setAnalyticsTargetSpace] = useState(null);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
 
-  // Fallback sample spaces matching seeded DB records
-  const sampleSpaces = [
-    {
-      id: 'ws_demo_live',
-      name: 'Cyberpunk Sci-Fi Premiere Watch',
-      titleName: 'Tears of Steel',
-      posterUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
-      participantsCount: 8,
-      status: 'LIVE',
-      inviteCode: 'CYBER-2026',
-      hostName: 'Elena (Party Host)',
-    },
-    {
-      id: 'ws_demo_sintel',
-      name: 'Fantasy Quest Friday',
-      titleName: 'Sintel',
-      posterUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80',
-      participantsCount: 4,
-      status: 'SCHEDULED',
-      inviteCode: 'QUEST-7712',
-      hostName: 'Elena (Party Host)',
-    }
-  ];
-
-  // Fetch active spaces from backend API
+  // Fetch genuine active spaces from backend API (no fake demo fallbacks)
   useEffect(() => {
     setLoadingSpaces(true);
     watchSpaceService.getActiveSpaces()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.slice(0, 3).map((ws) => ({
-            id: ws.id,
-            name: ws.name,
-            titleName: ws.title?.name || 'Feature Title',
-            posterUrl: ws.title?.posterUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
-            participantsCount: ws.currentParticipantsCount || 1,
-            status: ws.status || 'LIVE',
-            inviteCode: ws.inviteCode,
-            hostName: ws.hostUser?.displayName || 'Host',
-          }));
+          const seen = new Set();
+          const mapped = data
+            .filter((ws) => ws && ws.id && !seen.has(ws.id) && seen.add(ws.id))
+            .map((ws) => ({
+              id: ws.id,
+              name: ws.name,
+              titleName: ws.title?.name || 'Feature Title',
+              posterUrl: ws.title?.posterUrl || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80',
+              participantsCount: ws.currentParticipantsCount || 1,
+              status: ws.status || 'LIVE',
+              inviteCode: ws.inviteCode,
+              hostName: ws.hostUser?.displayName || 'Host',
+            }));
           setActiveSpaces(mapped);
         } else {
-          setActiveSpaces(sampleSpaces);
+          setActiveSpaces([]);
         }
       })
       .catch((err) => {
-        console.warn('Using seeded spaces fallback', err);
-        setActiveSpaces(sampleSpaces);
+        console.warn('Failed to load active spaces', err);
+        setActiveSpaces([]);
       })
       .finally(() => setLoadingSpaces(false));
+  }, []);
+
+  // Fetch real platform/session statistics from backend
+  useEffect(() => {
+    setLoadingStats(true);
+    analyticsService.getDashboardStats()
+      .then((data) => {
+        if (data) setStats(data);
+      })
+      .catch((err) => {
+        console.warn('Failed to load dashboard statistics', err);
+      })
+      .finally(() => setLoadingStats(false));
   }, []);
 
   // Fetch personalized recommendations
@@ -301,7 +296,9 @@ export default function DashboardPage() {
             <Radio className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-white">{activeSpaces.length} Live</div>
+            <div className="text-2xl font-bold text-white">
+              {stats?.liveSpacesCount != null ? stats.liveSpacesCount : activeSpaces.length} Live
+            </div>
             <div className="text-xs text-slate-400">Available Spaces</div>
           </div>
         </GlassCard>
@@ -311,7 +308,13 @@ export default function DashboardPage() {
             <Clock className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-white">18.4 hrs</div>
+            <div className="text-2xl font-bold text-white">
+              {stats?.totalWatchedHours > 0
+                ? `${stats.totalWatchedHours.toFixed(1)} hrs`
+                : stats?.totalWatchedSeconds > 0
+                  ? `${Math.round(stats.totalWatchedSeconds / 60)} mins`
+                  : '0 hrs'}
+            </div>
             <div className="text-xs text-slate-400">Watched Together</div>
           </div>
         </GlassCard>
@@ -321,8 +324,12 @@ export default function DashboardPage() {
             <Award className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-white">94%</div>
-            <div className="text-xs text-slate-400">Trivia Accuracy</div>
+            <div className="text-2xl font-bold text-white">
+              {stats?.triviaAccuracy != null ? `${stats.triviaAccuracy}%` : '—'}
+            </div>
+            <div className="text-xs text-slate-400">
+              {stats?.triviaAccuracy != null ? 'Trivia Accuracy' : 'Trivia Accuracy (No data)'}
+            </div>
           </div>
         </GlassCard>
 
@@ -331,7 +338,11 @@ export default function DashboardPage() {
             <Sparkles className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-white">42 Questions</div>
+            <div className="text-2xl font-bold text-white">
+              {stats?.aiQuestionsCount != null && stats.aiQuestionsCount > 0
+                ? `${stats.aiQuestionsCount} Questions`
+                : '0 Questions'}
+            </div>
             <div className="text-xs text-slate-400">AI Co-Pilot Answers</div>
           </div>
         </GlassCard>
@@ -351,56 +362,81 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {activeSpaces.map((space) => (
-            <GlassCard
-              key={space.id}
-              hoverEffect
-              className="p-5 flex items-center space-x-4 border-white/5 cursor-pointer group"
-              onClick={() => navigate(`/watch/${space.id}`)}
-            >
-              <img
-                src={space.posterUrl}
-                alt={space.titleName}
-                className="w-24 h-24 rounded-xl object-cover group-hover:scale-105 transition-transform"
-              />
-              <div className="flex-1 space-y-1.5 min-w-0">
-                <div className="flex items-center space-x-2">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                    space.status === 'LIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-300'
-                  }`}>
-                    {space.status}
-                  </span>
-                  <span className="text-xs text-slate-400 flex items-center space-x-1">
-                    <Users className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{space.participantsCount} participants</span>
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-white truncate group-hover:text-brand-purple transition-colors">
-                  {space.name}
-                </h3>
-                <p className="text-xs text-slate-300">
-                  Watching: <strong className="text-white">{space.titleName}</strong> &bull; Host: {space.hostName}
-                </p>
-                <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500">
-                  <span>Code: <code className="text-indigo-300 font-mono">{space.inviteCode}</code></span>
+        {activeSpaces.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {activeSpaces.map((space) => (
+              <GlassCard
+                key={space.id}
+                hoverEffect
+                className="p-5 flex items-center space-x-4 border-white/5 cursor-pointer group"
+                onClick={() => navigate(`/watch/${space.id}`)}
+              >
+                <img
+                  src={space.posterUrl}
+                  alt={space.titleName}
+                  className="w-24 h-24 rounded-xl object-cover group-hover:scale-105 transition-transform"
+                />
+                <div className="flex-1 space-y-1.5 min-w-0">
                   <div className="flex items-center space-x-2">
-                    <button
-                      onClick={(e) => handleOpenAnalytics(space.id, space.name, e)}
-                      className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-indigo-300 transition-colors"
-                      title="View session analytics"
-                    >
-                      <BarChart3 className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="text-indigo-400 font-medium group-hover:translate-x-1 transition-transform">
-                      Enter Space &rarr;
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                      space.status === 'LIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-300'
+                    }`}>
+                      {space.status}
+                    </span>
+                    <span className="text-xs text-slate-400 flex items-center space-x-1">
+                      <Users className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{space.participantsCount} participants</span>
                     </span>
                   </div>
+                  <h3 className="text-base font-bold text-white truncate group-hover:text-brand-purple transition-colors">
+                    {space.name}
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    Watching: <strong className="text-white">{space.titleName}</strong> &bull; Host: {space.hostName}
+                  </p>
+                  <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Code: <code className="text-indigo-300 font-mono">{space.inviteCode}</code></span>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={(e) => handleOpenAnalytics(space.id, space.name, e)}
+                        className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-indigo-300 transition-colors"
+                        title="View session analytics"
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-indigo-400 font-medium group-hover:translate-x-1 transition-transform">
+                        Enter Space &rarr;
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </GlassCard>
-          ))}
-        </div>
+              </GlassCard>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 rounded-2xl glass-panel border-white/10 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/20 mx-auto flex items-center justify-center text-indigo-400">
+              <Radio className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-white">No Active Watch Spaces Right Now</h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              There are currently no active public Watch Spaces. Create your own Watch Space to stream together in sync with friends!
+            </p>
+            <div className="pt-2">
+              <CinematicButton
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setPreselectedTitleId(null);
+                  setShowCreateModal(true);
+                }}
+              >
+                <PlusCircle className="w-4 h-4 mr-2" />
+                <span>Create Watch Space</span>
+              </CinematicButton>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Recommended for You Rail */}

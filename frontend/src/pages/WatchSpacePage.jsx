@@ -10,9 +10,10 @@ import TriviaOverlay from '../components/player/TriviaOverlay';
 import NarrativeVotingOverlay from '../components/player/NarrativeVotingOverlay';
 import SessionAnalyticsModal from '../components/analytics/SessionAnalyticsModal';
 import { interactionService } from '../services/interactionService';
+import { titleService } from '../services/titleService';
 import { tokenStorage } from '../utils/tokenStorage';
 import { getSubtitleTracksForTitle } from '../utils/subtitleTracks';
-import { BarChart3, Copy, Check, Share2 } from 'lucide-react';
+import { BarChart3, Copy, Check, Share2, Layers, Clock, Film } from 'lucide-react';
 
 export default function WatchSpacePage() {
   const { id } = useParams();
@@ -32,6 +33,25 @@ export default function WatchSpacePage() {
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [timelineEvents, setTimelineEvents] = useState([]);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
+
+  // Fetch authored content timeline for active title
+  useEffect(() => {
+    if (!space?.title?.id) return;
+    setLoadingTimeline(true);
+    titleService.getTitleTimeline(space.title.id)
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const sorted = [...data].sort((a, b) => (a.tsSeconds || 0) - (b.tsSeconds || 0));
+          setTimelineEvents(sorted);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load title timeline', err);
+      })
+      .finally(() => setLoadingTimeline(false));
+  }, [space?.title?.id]);
 
   const [aiHistory, setAiHistory] = useState([
     {
@@ -206,6 +226,56 @@ export default function WatchSpacePage() {
   const hostDisplayName = space?.hostUser?.displayName ||
     participants.find((p) => currentHostId != null && String(p.userId) === String(currentHostId))?.displayName ||
     'Host';
+
+  // Content Timeline helpers
+  const getEventDescription = (ev) => {
+    if (!ev?.payloadJson) return '';
+    try {
+      const p = typeof ev.payloadJson === 'string' ? JSON.parse(ev.payloadJson) : ev.payloadJson;
+      return p.description || p.definition || p.question || p.prompt || p.triviaNote || p.name || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const formatTimelineTime = (totalSeconds) => {
+    const sec = Math.max(0, Math.floor(totalSeconds || 0));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const getEventTypeBadge = (eventType) => {
+    switch (eventType) {
+      case 'SCENE':
+        return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+      case 'CHARACTER':
+        return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
+      case 'TRIVIA':
+        return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+      case 'GLOSSARY':
+        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
+      case 'VARIATION':
+        return 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+      default:
+        return 'bg-slate-700/50 text-slate-300 border-slate-600/30';
+    }
+  };
+
+  const activeTimelineEvent = timelineEvents.length > 0
+    ? [...timelineEvents]
+        .filter((ev) => (ev.tsSeconds || 0) <= currentVideoTime)
+        .pop() || timelineEvents[0]
+    : null;
+
+  const handleTimelineEventClick = (event) => {
+    if (isHost) {
+      sendPlaybackUpdate(playbackState, event.tsSeconds);
+      addToast(`Seeking room to ${event.title} (${formatTimelineTime(event.tsSeconds)})`, 'info');
+    } else {
+      addToast(`Host controls room playback. Event: "${event.title}" @ ${formatTimelineTime(event.tsSeconds)}`, 'info');
+    }
+  };
 
   // Chat message submit
   const handleSendMessage = (e) => {
@@ -636,6 +706,122 @@ export default function WatchSpacePage() {
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* Content Timeline Card */}
+            <div className="bg-obsidian-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white tracking-tight flex items-center space-x-2">
+                      <span>Content Timeline</span>
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-white/10 text-gray-300 font-normal">
+                        {timelineEvents.length} events
+                      </span>
+                    </h3>
+                    <p className="text-xs text-gray-400">
+                      Chronological scene markers, trivia checkpoints, and story variations
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {isHost ? (
+                    <span className="px-2.5 py-1 bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold rounded-lg flex items-center space-x-1.5">
+                      <span>👑</span>
+                      <span>Click Event to Seek Room</span>
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 bg-white/5 border border-white/10 text-gray-400 text-[11px] font-medium rounded-lg">
+                      Synchronized with Host
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Active Now Marker Bar */}
+              {activeTimelineEvent && (
+                <div className="p-3 rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-indigo-500/15 border border-indigo-500/30 flex items-center justify-between">
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse flex-shrink-0" />
+                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex-shrink-0">
+                      Active Scene ({formatTimelineTime(activeTimelineEvent.tsSeconds)}):
+                    </span>
+                    <span className="text-xs text-white font-semibold truncate">
+                      {activeTimelineEvent.title}
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase border flex-shrink-0 ml-2 ${getEventTypeBadge(activeTimelineEvent.eventType)}`}>
+                    {activeTimelineEvent.eventType}
+                  </span>
+                </div>
+              )}
+
+              {/* Timeline Events Chronological Grid */}
+              {loadingTimeline ? (
+                <div className="py-6 text-center text-xs text-gray-400">
+                  Loading timeline metadata...
+                </div>
+              ) : timelineEvents.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1">
+                  {timelineEvents.map((ev) => {
+                    const isActive = activeTimelineEvent?.id === ev.id;
+                    const desc = getEventDescription(ev);
+
+                    return (
+                      <div
+                        key={ev.id}
+                        onClick={() => handleTimelineEventClick(ev)}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer group ${
+                          isActive
+                            ? 'bg-indigo-950/40 border-indigo-500/60 ring-2 ring-indigo-500/40 shadow-lg shadow-indigo-500/10'
+                            : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                        }`}
+                        title={isHost ? `Jump room to ${formatTimelineTime(ev.tsSeconds)}` : `Event @ ${formatTimelineTime(ev.tsSeconds)}`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-mono font-bold text-indigo-300 bg-white/5 px-2 py-0.5 rounded">
+                            {formatTimelineTime(ev.tsSeconds)}
+                          </span>
+                          <div className="flex items-center space-x-1.5">
+                            {isActive && (
+                              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 bg-indigo-500 text-white rounded">
+                                NOW
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${getEventTypeBadge(ev.eventType)}`}>
+                              {ev.eventType}
+                            </span>
+                          </div>
+                        </div>
+
+                        <h4 className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
+                          {ev.title}
+                        </h4>
+
+                        {desc && (
+                          <p className="text-[11px] text-gray-300/80 mt-1 line-clamp-2 leading-relaxed">
+                            {desc}
+                          </p>
+                        )}
+
+                        {isHost && (
+                          <div className="mt-2 pt-1.5 border-t border-white/5 flex items-center justify-end text-[10px] text-indigo-400 group-hover:text-indigo-300 font-medium">
+                            <span>Seek to {formatTimelineTime(ev.tsSeconds)} &rarr;</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-6 text-center text-xs text-gray-500 italic">
+                  No authored timeline events found for this title.
+                </div>
+              )}
             </div>
           </div>
         </section>

@@ -204,6 +204,14 @@ public class WatchSpaceRoomSession {
         return payload;
     }
 
+    public synchronized int getActiveParticipantCount() {
+        return sessions.size();
+    }
+
+    public synchronized Collection<ParticipantInfo> getParticipants() {
+        return Collections.unmodifiableCollection(new ArrayList<>(sessions.values()));
+    }
+
     public synchronized void broadcastPresence() {
         broadcast(WebSocketEnvelope.of("room.presence.update", watchSpaceId, getPresencePayload()));
     }

@@ -1,12 +1,17 @@
 package com.netflix.watchspaces.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.netflix.watchspaces.domain.dto.response.DashboardStatsResponse;
 import com.netflix.watchspaces.domain.dto.response.SessionAnalyticsResponse;
+import com.netflix.watchspaces.domain.dto.response.WatchSpaceResponse;
+import com.netflix.watchspaces.domain.entity.Interaction;
 import com.netflix.watchspaces.domain.entity.SessionAnalytics;
 import com.netflix.watchspaces.domain.entity.Title;
 import com.netflix.watchspaces.domain.entity.User;
 import com.netflix.watchspaces.domain.entity.WatchSpace;
+import com.netflix.watchspaces.domain.enums.MessageType;
 import com.netflix.watchspaces.repository.ChatMessageRepository;
+import com.netflix.watchspaces.repository.InteractionRepository;
 import com.netflix.watchspaces.repository.SessionAnalyticsRepository;
 import com.netflix.watchspaces.repository.WatchSpaceRepository;
 import com.netflix.watchspaces.websocket.WatchSpaceRoomManager;
@@ -18,8 +23,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -37,6 +44,12 @@ public class SessionAnalyticsServiceTest {
 
     @Mock
     private ChatMessageRepository chatMessageRepository;
+
+    @Mock
+    private InteractionRepository interactionRepository;
+
+    @Mock
+    private WatchSpaceService watchSpaceService;
 
     @Mock
     private WatchSpaceRoomManager roomManager;
@@ -116,6 +129,35 @@ public class SessionAnalyticsServiceTest {
                     assertEquals("ws_analytics_test", res.getWatchSpaceId());
                     assertEquals(4, res.getPeakParticipants());
                     assertEquals(15, res.getChatMessagesCount());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void testGetDashboardStats() {
+        WatchSpaceResponse dummySpace = new WatchSpaceResponse();
+        dummySpace.setId("ws_1");
+        when(watchSpaceService.getActivePublicSpaces(null)).thenReturn(Flux.just(dummySpace));
+
+        SessionAnalytics session = SessionAnalytics.builder()
+                .sessionDurationSeconds(3600)
+                .aiQuestionsCount(4)
+                .build();
+        when(sessionAnalyticsRepository.findAll()).thenReturn(List.of(session));
+
+        Interaction interaction = Interaction.builder()
+                .watchedSeconds(1800)
+                .build();
+        when(interactionRepository.findAll()).thenReturn(List.of(interaction));
+        when(chatMessageRepository.countByMsgType(MessageType.AI)).thenReturn(2L);
+
+        StepVerifier.create(sessionAnalyticsService.getDashboardStats())
+                .assertNext(stats -> {
+                    assertEquals(1, stats.getLiveSpacesCount());
+                    assertEquals(5400L, stats.getTotalWatchedSeconds()); // 3600 + 1800
+                    assertEquals(1.5, stats.getTotalWatchedHours()); // 5400 / 3600 = 1.5
+                    assertEquals(6, stats.getAiQuestionsCount()); // 4 + 2 = 6
+                    assertNull(stats.getTriviaAccuracy()); // unmeasured -> null
                 })
                 .verifyComplete();
     }

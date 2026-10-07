@@ -8,4 +8,8 @@ export const titleService = {
   getTitleById: async (id) => {
     return apiClient(`/api/v1/titles/${id}`);
   },
+
+  getTitleTimeline: async (titleId) => {
+    return apiClient(`/api/v1/titles/${titleId}/timeline`);
+  },
 };

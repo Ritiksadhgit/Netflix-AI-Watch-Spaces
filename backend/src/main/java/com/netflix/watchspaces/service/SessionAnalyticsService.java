@@ -1,10 +1,14 @@
 package com.netflix.watchspaces.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.netflix.watchspaces.domain.dto.response.DashboardStatsResponse;
 import com.netflix.watchspaces.domain.dto.response.SessionAnalyticsResponse;
+import com.netflix.watchspaces.domain.entity.Interaction;
 import com.netflix.watchspaces.domain.entity.SessionAnalytics;
 import com.netflix.watchspaces.domain.entity.WatchSpace;
+import com.netflix.watchspaces.domain.enums.MessageType;
 import com.netflix.watchspaces.repository.ChatMessageRepository;
+import com.netflix.watchspaces.repository.InteractionRepository;
 import com.netflix.watchspaces.repository.SessionAnalyticsRepository;
 import com.netflix.watchspaces.repository.WatchSpaceRepository;
 import com.netflix.watchspaces.websocket.WatchSpaceRoomManager;
@@ -17,6 +21,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -28,6 +33,8 @@ public class SessionAnalyticsService {
     private final SessionAnalyticsRepository sessionAnalyticsRepository;
     private final WatchSpaceRepository watchSpaceRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final InteractionRepository interactionRepository;
+    private final WatchSpaceService watchSpaceService;
     private final WatchSpaceRoomManager roomManager;
     private final ObjectMapper objectMapper;
 
@@ -35,11 +42,15 @@ public class SessionAnalyticsService {
             SessionAnalyticsRepository sessionAnalyticsRepository,
             WatchSpaceRepository watchSpaceRepository,
             ChatMessageRepository chatMessageRepository,
+            InteractionRepository interactionRepository,
+            WatchSpaceService watchSpaceService,
             WatchSpaceRoomManager roomManager,
             ObjectMapper objectMapper) {
         this.sessionAnalyticsRepository = sessionAnalyticsRepository;
         this.watchSpaceRepository = watchSpaceRepository;
         this.chatMessageRepository = chatMessageRepository;
+        this.interactionRepository = interactionRepository;
+        this.watchSpaceService = watchSpaceService;
         this.roomManager = roomManager;
         this.objectMapper = objectMapper;
     }
@@ -168,5 +179,46 @@ public class SessionAnalyticsService {
 
             throw new IllegalArgumentException("Session analytics not found for space: " + watchSpaceId);
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<DashboardStatsResponse> getDashboardStats() {
+        return watchSpaceService.getActivePublicSpaces(null)
+                .collectList()
+                .publishOn(Schedulers.boundedElastic())
+                .map(activeSpaces -> {
+                    int liveSpacesCount = activeSpaces.size();
+
+                    // Calculate total watched seconds from session analytics & interactions
+                    List<SessionAnalytics> analyticsList = sessionAnalyticsRepository.findAll();
+                    long sessionDurationSum = analyticsList.stream()
+                            .mapToLong(SessionAnalytics::getSessionDurationSeconds)
+                            .sum();
+
+                    List<Interaction> interactions = interactionRepository.findAll();
+                    long interactionDurationSum = interactions.stream()
+                            .mapToLong(i -> i.getWatchedSeconds() != null ? i.getWatchedSeconds() : 0)
+                            .sum();
+
+                    long totalWatchedSeconds = sessionDurationSum + interactionDurationSum;
+                    double totalWatchedHours = Math.round((totalWatchedSeconds / 3600.0) * 10.0) / 10.0;
+
+                    // Calculate AI questions count from session analytics and chat messages
+                    int analyticsAiQuestions = analyticsList.stream()
+                            .mapToInt(SessionAnalytics::getAiQuestionsCount)
+                            .sum();
+                    long chatAiMessages = chatMessageRepository.countByMsgType(MessageType.AI);
+                    int totalAiQuestions = (int) (analyticsAiQuestions + chatAiMessages);
+
+                    // Trivia accuracy: null when unmeasured, rendered as "—"
+                    Double triviaAccuracy = null;
+
+                    return new DashboardStatsResponse(
+                            liveSpacesCount,
+                            totalWatchedSeconds,
+                            totalWatchedHours,
+                            totalAiQuestions,
+                            triviaAccuracy
+                    );
+                });
     }
 }

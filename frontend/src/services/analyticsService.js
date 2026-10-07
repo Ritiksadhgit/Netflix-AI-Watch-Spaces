@@ -10,4 +10,8 @@ export const analyticsService = {
       method: 'POST',
     });
   },
+
+  getDashboardStats: async () => {
+    return apiClient('/api/v1/analytics/dashboard');
+  },
 };

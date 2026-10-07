@@ -193,10 +193,66 @@ public class WatchSpaceServiceTest {
                 .verifyComplete();
         verify(room).approveVariant(variant, 10L, false);
 
-        // Viewer (id=99L) gets 403 Forbidden
         StepVerifier.create(watchSpaceService.approveVariant("ws_test_1", variant, 99L, false))
                 .expectErrorMatches(err -> err instanceof org.springframework.web.server.ResponseStatusException &&
                         ((org.springframework.web.server.ResponseStatusException) err).getStatusCode() == org.springframework.http.HttpStatus.FORBIDDEN)
                 .verify();
+    }
+
+    @Test
+    @DisplayName("getActivePublicSpaces - Should filter stale spaces and deduplicate identical rooms")
+    void testActivePublicSpacesFilteringAndDeduplication() {
+        WatchSpace liveDemo = WatchSpace.builder()
+                .id("ws_demo_live")
+                .name("Demo Space")
+                .title(title)
+                .hostUser(hostUser)
+                .status(WatchSpaceStatus.LIVE)
+                .privacy(PrivacyType.PUBLIC)
+                .createdAt(LocalDateTime.now().minusDays(1))
+                .build();
+
+        WatchSpace freshUserSpace = WatchSpace.builder()
+                .id("ws_fresh")
+                .name("Tears of Steel Watch Space")
+                .title(title)
+                .hostUser(hostUser)
+                .status(WatchSpaceStatus.LIVE)
+                .privacy(PrivacyType.PUBLIC)
+                .createdAt(LocalDateTime.now().minusMinutes(5))
+                .build();
+
+        WatchSpace duplicateOlderSpace = WatchSpace.builder()
+                .id("ws_old_dup")
+                .name("Tears of Steel Watch Space")
+                .title(title)
+                .hostUser(hostUser)
+                .status(WatchSpaceStatus.LIVE)
+                .privacy(PrivacyType.PUBLIC)
+                .createdAt(LocalDateTime.now().minusMinutes(30))
+                .build();
+
+        WatchSpace staleInactiveSpace = WatchSpace.builder()
+                .id("ws_stale")
+                .name("Stale Abandoned Space")
+                .title(title)
+                .hostUser(hostUser)
+                .status(WatchSpaceStatus.LIVE)
+                .privacy(PrivacyType.PUBLIC)
+                .createdAt(LocalDateTime.now().minusHours(5))
+                .build();
+
+        when(watchSpaceRepository.findByStatusOrderByCreatedAtDesc(WatchSpaceStatus.LIVE))
+                .thenReturn(List.of(freshUserSpace, duplicateOlderSpace, staleInactiveSpace, liveDemo));
+        when(roomManager.getRoom(anyString())).thenReturn(Optional.empty());
+        when(participantRepository.findActiveByWatchSpaceId(anyString())).thenReturn(Collections.emptyList());
+
+        StepVerifier.create(watchSpaceService.getActivePublicSpaces(null).collectList())
+                .assertNext(spaces -> {
+                    assertEquals(2, spaces.size()); // only freshUserSpace and liveDemo (duplicate & stale excluded)
+                    assertEquals("ws_fresh", spaces.get(0).getId());
+                    assertEquals("ws_demo_live", spaces.get(1).getId());
+                })
+                .verifyComplete();
     }
 }

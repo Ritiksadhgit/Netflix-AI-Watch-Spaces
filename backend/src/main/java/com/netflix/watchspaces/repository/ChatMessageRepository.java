@@ -19,4 +19,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.watchSpace.id = :watchSpaceId")
     long countByWatchSpaceId(String watchSpaceId);
+
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.msgType = :msgType")
+    long countByMsgType(com.netflix.watchspaces.domain.enums.MessageType msgType);
 }

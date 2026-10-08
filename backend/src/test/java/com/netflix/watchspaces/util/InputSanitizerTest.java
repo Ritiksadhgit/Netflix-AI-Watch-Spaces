@@ -28,4 +28,25 @@ public class InputSanitizerTest {
         assertTrue(clean.contains("[filtered]"));
         assertTrue(clean.contains("Amsterdam"));
     }
+
+    @Test
+    public void testSanitizeChatStripsMultilineScript() {
+        String multilineScript = "<script>\nalert('xss');\n</script>Safe Text";
+        String clean = InputSanitizer.sanitizeChat(multilineScript);
+        assertEquals("Safe Text", clean);
+    }
+
+    @Test
+    public void testSanitizeChatStripsPureScriptToEmpty() {
+        String pureScript = "<script>alert('xss')</script>";
+        String clean = InputSanitizer.sanitizeChat(pureScript);
+        assertEquals("", clean);
+    }
+
+    @Test
+    public void testSanitizeChatStripsEventHandlers() {
+        String handlerPayload = "<img src='invalid' onerror='alert(1)'>Valid Content";
+        String clean = InputSanitizer.sanitizeChat(handlerPayload);
+        assertEquals("Valid Content", clean);
+    }
 }

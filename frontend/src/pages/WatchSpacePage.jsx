@@ -36,11 +36,11 @@ export default function WatchSpacePage() {
   const [timelineEvents, setTimelineEvents] = useState([]);
   const [loadingTimeline, setLoadingTimeline] = useState(false);
 
-  // Fetch authored content timeline for active title
   useEffect(() => {
-    if (!space?.title?.id) return;
+    const targetTitleId = space?.title?.id || space?.titleId;
+    if (!targetTitleId) return;
     setLoadingTimeline(true);
-    titleService.getTitleTimeline(space.title.id)
+    titleService.getTitleTimeline(targetTitleId)
       .then((data) => {
         if (Array.isArray(data)) {
           const sorted = [...data].sort((a, b) => (a.tsSeconds || 0) - (b.tsSeconds || 0));
@@ -51,7 +51,7 @@ export default function WatchSpacePage() {
         console.warn('Failed to load title timeline', err);
       })
       .finally(() => setLoadingTimeline(false));
-  }, [space?.title?.id]);
+  }, [space?.title?.id, space?.titleId]);
 
   const [aiHistory, setAiHistory] = useState([
     {
@@ -494,13 +494,29 @@ export default function WatchSpacePage() {
             )}
           </button>
 
-          {/* Participant count badge */}
           <div className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>{participantCount || participants.length || 1} online</span>
           </div>
 
-          {/* Session Analytics Button */}
+          <button
+            onClick={() => setActiveTab('timeline')}
+            className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
+              activeTab === 'timeline'
+                ? 'bg-indigo-600/25 border-indigo-500/40 text-indigo-300'
+                : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
+            }`}
+            title="View Content Timeline"
+          >
+            <Layers className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Timeline</span>
+            {timelineEvents.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 bg-white/10 rounded-full font-mono">
+                {timelineEvents.length}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={() => setShowAnalyticsModal(true)}
             className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-semibold transition-colors"
@@ -828,11 +844,10 @@ export default function WatchSpacePage() {
 
         {/* Right Stage: Interactive Glassmorphic Drawer (Chat / Presence / AI) */}
         <aside className="w-full lg:w-96 bg-obsidian-900/80 backdrop-blur-md border-t lg:border-t-0 lg:border-l border-white/10 flex flex-col h-96 lg:h-auto">
-          {/* Tab Bar */}
           <div className="flex items-center border-b border-white/10 bg-obsidian-950/40">
             <button
               onClick={() => setActiveTab('chat')}
-              className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase transition-colors border-b-2 flex items-center justify-center space-x-1.5 ${
+              className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase transition-colors border-b-2 flex items-center justify-center space-x-1 ${
                 activeTab === 'chat'
                   ? 'text-indigo-400 border-indigo-500 bg-white/5'
                   : 'text-gray-400 border-transparent hover:text-white'
@@ -843,8 +858,32 @@ export default function WatchSpacePage() {
             </button>
 
             <button
+              onClick={() => setActiveTab('timeline')}
+              className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase transition-colors border-b-2 flex items-center justify-center space-x-1 ${
+                activeTab === 'timeline'
+                  ? 'text-indigo-400 border-indigo-500 bg-white/5'
+                  : 'text-gray-400 border-transparent hover:text-white'
+              }`}
+            >
+              <span>Timeline</span>
+              <span className="text-[10px] px-1.5 py-0.2 bg-white/10 rounded-full">{timelineEvents.length}</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ai')}
+              className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase transition-colors border-b-2 flex items-center justify-center space-x-1 ${
+                activeTab === 'ai'
+                  ? 'text-indigo-400 border-indigo-500 bg-white/5'
+                  : 'text-gray-400 border-transparent hover:text-white'
+              }`}
+            >
+              <span>AI</span>
+              <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+            </button>
+
+            <button
               onClick={() => setActiveTab('roster')}
-              className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase transition-colors border-b-2 flex items-center justify-center space-x-1.5 ${
+              className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase transition-colors border-b-2 flex items-center justify-center space-x-1 ${
                 activeTab === 'roster'
                   ? 'text-indigo-400 border-indigo-500 bg-white/5'
                   : 'text-gray-400 border-transparent hover:text-white'
@@ -852,18 +891,6 @@ export default function WatchSpacePage() {
             >
               <span>People</span>
               <span className="text-[10px] px-1.5 py-0.2 bg-white/10 rounded-full">{participantCount || participants.length}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('ai')}
-              className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase transition-colors border-b-2 flex items-center justify-center space-x-1.5 ${
-                activeTab === 'ai'
-                  ? 'text-indigo-400 border-indigo-500 bg-white/5'
-                  : 'text-gray-400 border-transparent hover:text-white'
-              }`}
-            >
-              <span>AI Co-Pilot</span>
-              <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
             </button>
           </div>
 
@@ -950,6 +977,93 @@ export default function WatchSpacePage() {
                   </svg>
                 </button>
               </form>
+            </div>
+          )}
+
+          {activeTab === 'timeline' && (
+            <div className="flex-1 flex flex-col justify-between overflow-hidden p-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 border border-indigo-500/20 mb-2 space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse flex-shrink-0" />
+                    <span className="text-xs font-bold text-indigo-300 truncate">
+                      {activeTimelineEvent ? activeTimelineEvent.title : 'Content Timeline'}
+                    </span>
+                  </div>
+                  {activeTimelineEvent && (
+                    <span className="text-[10px] font-mono font-bold text-indigo-200 bg-indigo-500/20 px-1.5 py-0.5 rounded">
+                      {formatTimelineTime(activeTimelineEvent.tsSeconds)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-gray-400">
+                  <span>{timelineEvents.length} authored markers</span>
+                  <span>{isHost ? 'Click to seek room' : 'Syncs with Host'}</span>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {loadingTimeline ? (
+                  <div className="h-full flex items-center justify-center text-xs text-gray-400">
+                    Loading timeline...
+                  </div>
+                ) : timelineEvents.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-4 text-gray-500">
+                    <Layers className="w-8 h-8 mb-2 opacity-50" />
+                    <p className="text-xs">No authored timeline events found for this title.</p>
+                  </div>
+                ) : (
+                  timelineEvents.map((ev) => {
+                    const isActive = activeTimelineEvent?.id === ev.id;
+                    const desc = getEventDescription(ev);
+
+                    return (
+                      <div
+                        key={ev.id}
+                        onClick={() => handleTimelineEventClick(ev)}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-indigo-950/50 border-indigo-500/60 ring-2 ring-indigo-500/40 shadow-md'
+                            : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
+                        }`}
+                        title={isHost ? `Seek room to ${formatTimelineTime(ev.tsSeconds)}` : `Event at ${formatTimelineTime(ev.tsSeconds)}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="text-[11px] font-mono font-bold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded">
+                              {formatTimelineTime(ev.tsSeconds)}
+                            </span>
+                            {isActive && (
+                              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-indigo-500 text-white rounded">
+                                NOW
+                              </span>
+                            )}
+                          </div>
+                          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.2 rounded border ${getEventTypeBadge(ev.eventType)}`}>
+                            {ev.eventType}
+                          </span>
+                        </div>
+
+                        <h4 className="text-xs font-semibold text-white truncate">
+                          {ev.title}
+                        </h4>
+
+                        {desc && (
+                          <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">
+                            {desc}
+                          </p>
+                        )}
+
+                        {isHost && (
+                          <div className="mt-1.5 pt-1 border-t border-white/5 flex items-center justify-end text-[10px] text-indigo-400 font-medium">
+                            <span>Seek to {formatTimelineTime(ev.tsSeconds)} &rarr;</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
 

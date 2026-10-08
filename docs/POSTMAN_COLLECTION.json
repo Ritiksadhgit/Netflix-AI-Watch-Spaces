@@ -1,0 +1,639 @@
+{
+  "info": {
+    "name": "Netflix AI Watch Spaces API",
+    "description": "Comprehensive Postman Collection for Netflix AI Watch Spaces REST API endpoints including Authentication, Titles, Watch Spaces, Grounded AI Co-Pilot, Timeline Studio, Analytics, Recommendations, and Host Governance.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "titleId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "watchSpaceId",
+      "value": "ws_demo_tears",
+      "type": "string"
+    },
+    {
+      "key": "eventId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alex@netflixwatch.io\",\n  \"password\": \"SecurePass123!\",\n  \"displayName\": \"Alex Cinephile\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('token', jsonData.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alex@netflixwatch.io\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Get Current Profile (Me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Catalog Titles",
+      "item": [
+        {
+          "name": "List All Titles",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/titles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "titles"]
+            }
+          }
+        },
+        {
+          "name": "Get Title By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/titles/{{titleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "titles", "{{titleId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Watch Spaces",
+      "item": [
+        {
+          "name": "Create Watch Space",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Friday Sci-Fi Marathon\",\n  \"titleId\": 1,\n  \"privacy\": \"PUBLIC\",\n  \"maxParticipants\": 20,\n  \"aiVerbosity\": \"NORMAL\",\n  \"votingEnabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Public Watch Spaces",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces"]
+            }
+          }
+        },
+        {
+          "name": "Get Watch Space Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces/{{watchSpaceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces", "{{watchSpaceId}}"]
+            }
+          }
+        },
+        {
+          "name": "Join Space by Invite Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inviteCode\": \"TEARS1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces/join-by-code",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces", "join-by-code"]
+            }
+          }
+        },
+        {
+          "name": "Host Pins AI Fact",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Thom operates the robotic arm on the Amsterdam bridge sequence.\",\n  \"citations\": [\n    {\n      \"timelineEventId\": 2,\n      \"timestamp\": 45,\n      \"eventType\": \"CHARACTER\",\n      \"title\": \"Thom\",\n      \"snippet\": \"Thom is Lead Engineer.\"\n    }\n  ],\n  \"pinnedBy\": \"Host\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces/{{watchSpaceId}}/pin-fact",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces", "{{watchSpaceId}}", "pin-fact"]
+            }
+          }
+        },
+        {
+          "name": "Get Currently Pinned Fact",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces/{{watchSpaceId}}/pinned-fact",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces", "{{watchSpaceId}}", "pinned-fact"]
+            }
+          }
+        },
+        {
+          "name": "Host Unpins AI Fact",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces/{{watchSpaceId}}/pin-fact",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces", "{{watchSpaceId}}", "pin-fact"]
+            }
+          }
+        },
+        {
+          "name": "Host Approves Localized Variant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"variantId\": \"es\",\n  \"label\": \"Spanish Subtitles (Authoritative)\",\n  \"lang\": \"es\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces/{{watchSpaceId}}/variant/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces", "{{watchSpaceId}}", "variant", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Get Approved Variant",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces/{{watchSpaceId}}/variant/approved",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces", "{{watchSpaceId}}", "variant", "approved"]
+            }
+          }
+        },
+        {
+          "name": "Get Eligible Pre-Authored Variants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watch-spaces/{{watchSpaceId}}/variants/eligible",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "watch-spaces", "{{watchSpaceId}}", "variants", "eligible"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Timeline & AI Co-Pilot",
+      "item": [
+        {
+          "name": "Get Content Timeline for Title",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/titles/{{titleId}}/timeline",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "titles", "{{titleId}}", "timeline"]
+            }
+          }
+        },
+        {
+          "name": "Get Trivia Checkpoints for Title",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/titles/{{titleId}}/trivia",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "titles", "{{titleId}}", "trivia"]
+            }
+          }
+        },
+        {
+          "name": "Ask Grounded AI Co-Pilot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"Who is Thom and what weapon is he charging?\",\n  \"currentTimestamp\": 50.0,\n  \"verbosity\": \"NORMAL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/titles/{{titleId}}/ai/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "titles", "{{titleId}}", "ai", "ask"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Analytics & Recommendations",
+      "item": [
+        {
+          "name": "Get Global Dashboard Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/analytics/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "analytics", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "Get Room Session Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/analytics/watch-spaces/{{watchSpaceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "analytics", "watch-spaces", "{{watchSpaceId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Personalized Recommendations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/recommendations/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "recommendations", "me"]
+            }
+          }
+        },
+        {
+          "name": "Record Watch Interaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titleId\": 1,\n  \"watchDurationSeconds\": 120\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/interactions/watch",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "interactions", "watch"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Admin Timeline Studio (ROLE_ADMIN)",
+      "item": [
+        {
+          "name": "Admin: Get Title Timeline",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/titles/{{titleId}}/timeline",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "titles", "{{titleId}}", "timeline"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Create Marker",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tsSeconds\": 120,\n  \"eventType\": \"SCENE\",\n  \"title\": \"Bridge Confrontation\",\n  \"payloadJson\": \"{\\\"description\\\": \\\"The standoff begins.\\\"}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/titles/{{titleId}}/timeline/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "titles", "{{titleId}}", "timeline", "events"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Update Marker",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tsSeconds\": 125,\n  \"eventType\": \"SCENE\",\n  \"title\": \"Bridge Confrontation Extended\",\n  \"payloadJson\": \"{\\\"description\\\": \\\"The robotic forces advance.\\\"}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/titles/{{titleId}}/timeline/events/{{eventId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "titles", "{{titleId}}", "timeline", "events", "{{eventId}}"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Delete Marker",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/titles/{{titleId}}/timeline/events/{{eventId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "titles", "{{titleId}}", "timeline", "events", "{{eventId}}"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Bulk Import Timeline",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"replaceExisting\": false,\n  \"events\": [\n    {\n      \"tsSeconds\": 15,\n      \"eventType\": \"SCENE\",\n      \"title\": \"Bridge Intro\",\n      \"payloadJson\": \"{\\\"description\\\": \\\"Opening scene.\\\"}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/titles/{{titleId}}/timeline/import",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "titles", "{{titleId}}", "timeline", "import"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
